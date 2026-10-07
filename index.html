@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OoT3D Model Importer</title>
+<meta name="description" content="Convert ModLoader64 (zzplayas) Ocarina of Time player models and voice packs into Ocarina of Time 3D mods, in your browser.">
+<link rel="stylesheet" href="web/style.css">
+</head>
+<body>
+<main>
+  <header>
+    <h1>OoT3D Model Importer</h1>
+    <p class="lede">Turn ModLoader64 Ocarina of Time player models (<code>.pak</code> / <code>.zobj</code>) and voice packs into an Ocarina of Time&nbsp;3D mod for Citra or a modded 3DS.</p>
+    <p class="note">Everything runs in your browser. Your files are never uploaded, and no game files are hosted here: you provide them from your own copy of OoT3D.</p>
+  </header>
+
+  <section class="step" id="step-mod">
+    <h2><span class="num">1</span> Mod files</h2>
+    <p>ML64 <code>.pak</code> files, <code>.zip</code> files or loose <code>.zobj</code> files. Add an adult model, a child model and/or a voice pack. MM models inside a pack are skipped.</p>
+    <label class="drop" id="mod-drop">
+      <input type="file" id="mod-input" multiple accept=".pak,.zip,.zobj">
+      <span>Drop files here or <u>browse</u></span>
+    </label>
+    <ul class="found" id="mod-found"></ul>
+    <div id="equipment"></div>
+  </section>
+
+  <section class="step" id="step-game">
+    <h2><span class="num">2</span> Your OoT3D game files</h2>
+    <p>From your own extracted romfs (<code>ExtractedRomFS</code>). Pick the files listed below, or pick the whole romfs folder.</p>
+    <div class="row">
+      <label class="button secondary"><input type="file" id="game-files" multiple accept=".zar,.bcsar">Pick files</label>
+      <label class="button secondary"><input type="file" id="game-folder" webkitdirectory>Pick romfs folder</label>
+    </div>
+    <ul class="found" id="game-found"><li class="muted">Add mod files first to see which game files are needed.</li></ul>
+  </section>
+
+  <section class="step" id="step-out">
+    <h2><span class="num">3</span> Output</h2>
+    <div class="row">
+      <label>Install for
+        <select id="layout">
+          <option value="citra">Citra (load/mods folder)</option>
+          <option value="luma">3DS (Luma SD card)</option>
+          <option value="romfs">Plain romfs folder</option>
+        </select>
+      </label>
+      <label>Game region
+        <select id="region">
+          <option value="usa">USA</option>
+          <option value="eur">Europe</option>
+          <option value="jpn">Japan</option>
+        </select>
+      </label>
+    </div>
+    <p class="muted" id="layout-help"></p>
+    <button id="convert" disabled>Convert</button>
+    <a class="button" id="download" hidden>Download mod (.zip)</a>
+    <pre id="log" aria-live="polite"></pre>
+  </section>
+
+  <section class="info">
+    <h2>Good to know</h2>
+    <ul>
+      <li>Results vary from model to model: some held items may sit slightly differently than on the N64, and the first-person slingshot can show a small stray sliver.</li>
+      <li>Tunic colours (Kokiri / Goron / Zora) work for adult models. Turn off the OoT3D Randomizer's <em>Custom Tunic Colors</em> option, which is not compatible with imported models. Child models stay Kokiri green, as in the base game.</li>
+      <li>A voice pack replaces Link's voice clips; any of Link's voice clips the pack doesn't cover are silenced.</li>
+    </ul>
+    <h2>Credits</h2>
+    <ul>
+      <li>ModLoader64 / Z64Online player model format and manifests: <a href="https://github.com/hylian-modding/Z64-CustomPlayerModels">hylian-modding/Z64-CustomPlayerModels</a></li>
+      <li>OoT3D model and animation format references: <a href="https://github.com/magcius/noclip.website">noclip.website</a></li>
+      <li>OoT3D game behaviour and randomizer compatibility: <a href="https://github.com/gamestabled/OoT3D_Randomizer">gamestabled/OoT3D_Randomizer</a></li>
+      <li>Python in the browser: <a href="https://pyodide.org">Pyodide</a></li>
+    </ul>
+    <p class="muted"><a href="https://github.com/jd-contreras/oot3d-zobj-import">Source on GitHub</a>. Not affiliated with Nintendo. Ocarina of Time is a trademark of Nintendo.</p>
+  </section>
+</main>
+<script src="web/app.js"></script>
+</body>
+</html>

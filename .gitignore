@@ -1,0 +1,11 @@
+# build output and local test data (game files and third-party mods must never be committed)
+out/
+work/
+local-test/
+__pycache__/
+*.pyc
+*.zar
+*.bcsar
+*.pak
+*.zobj
+*.zip

@@ -1,0 +1,152 @@
+"""One-step OoT3D mod from ML64 player / voice mods.
+
+    python tools/pack.py <inputs...> --romfs <ExtractedRomFS> -o <out.zip | out_dir>
+                         [--layout citra|luma|romfs] [--region usa|eur|jpn] [--equipment all|none|key,key...]
+
+Inputs: any mix of .pak, .zip, .zobj files and folders. The OoT adult / child zobjs and the voice
+clips (sounds/<hex id>/...) are found inside them; MM zobjs are skipped. --romfs is the user's own
+extracted OoT3D romfs (only the files the mod replaces are read from it).
+--equipment picks which of the model's N64 items to use (default all it has); the rest stay
+OoT3D's. Keys: python tools/pack.py --list-equipment <inputs...>
+"""
+import sys, os, io, zipfile, argparse
+import numpy as np
+
+sys.path.insert(0, os.path.dirname(__file__))
+import build, voice, ml64pak
+
+TITLE_IDS = {'usa': '0004000000033500', 'eur': '0004000000033600', 'jpn': '0004000000033400'}
+GAME_FILES = {  # file name -> path inside the romfs
+    'zelda_link_boy_new.zar': 'actor/zelda_link_boy_new.zar',
+    'zelda_link_child_new.zar': 'actor/zelda_link_child_new.zar',
+    'QueenSound.bcsar': 'sound/QueenSound.bcsar',
+}
+
+
+def expand(name, data):
+    """{path: bytes} of one input file (archives are opened)."""
+    low = name.lower()
+    if low.endswith('.pak'):
+        return {name + '/' + k: v for k, v in ml64pak.read(data).items()}
+    if low.endswith('.zip'):
+        out = {}
+        with zipfile.ZipFile(io.BytesIO(data)) as z:
+            for info in z.infolist():
+                if not info.is_dir():
+                    out.update(expand(name + '/' + info.filename, z.read(info)))
+        return out
+    return {name: data}
+
+
+def plan(files):
+    """What a file set contains: ({'adult'|'child': (path, zobj bytes)}, {sound id: clips}, notes)."""
+    models, notes = {}, []
+    for path, data in sorted(files.items()):
+        if not path.lower().endswith('.zobj'):
+            continue
+        age = build.model_age(data)
+        if age is None:
+            notes.append(f'skipped {path} (not an OoT ML64 player zobj, e.g. an MM model)')
+        elif age in models:
+            notes.append(f'skipped {path} (already using {models[age][0]} for {age})')
+        else:
+            models[age] = (path, data)
+    return models, voice.find_clips(files), notes
+
+
+def equipment_options(models):
+    """{age: [(key, label, available in the model)]} for the planned models."""
+    return {age: build.equipment_options(data) for age, (_, data) in models.items()}
+
+
+def make_mod(files, game, rate=22050, layout='citra', region='usa', decode=None, log=print, equipment=None):
+    """files: {path: bytes} (inputs, already expanded). game: {GAME_FILES name: bytes} (only those
+    needed). decode(bytes) -> mono int16 PCM at `rate` (default ffmpeg); audio files may also be
+    given already decoded as numpy arrays. equipment: {age: [keys] or None (all)} or None (all).
+    Returns ({output path: bytes}, report lines)."""
+    models, clips, report = plan(files)
+    if not models and not clips:
+        raise ValueError('no OoT player zobj or voice clips found in the inputs')
+    tid = TITLE_IDS[region]
+    base = {'citra': f'{tid}/romfs/', 'luma': f'luma/titles/{tid}/romfs/', 'romfs': 'romfs/'}[layout]
+    out = {}
+    build.log = log
+    for age in ('adult', 'child'):
+        if age not in models:
+            continue
+        path, data = models[age]
+        need = build.target_zar(age)
+        if need not in game:
+            raise ValueError(f'{need} from your OoT3D romfs (actor/{need}) is needed for the {age} model')
+        log(f'converting {age} model {path}')
+        res = build.convert(data, game[need], (equipment or {}).get(age))
+        out[base + 'actor/' + res['name']] = res['zar']
+        report.append(f'{age}: {path} -> romfs/actor/{res["name"]}')
+    if clips:
+        if 'QueenSound.bcsar' not in game:
+            raise ValueError('QueenSound.bcsar from your OoT3D romfs (sound/QueenSound.bcsar) is needed for the voice')
+        dec = decode or (lambda d: voice.decode_clip(d, rate))
+        log(f'decoding {sum(len(v) for v in clips.values())} voice clips')
+        pcm = {sid: [(n, d if isinstance(d, np.ndarray) else dec(d)) for n, d in cl] for sid, cl in clips.items()}
+        bcsar, vrep = voice.build(pcm, game['QueenSound.bcsar'], rate, log=log)
+        out[base + 'sound/QueenSound.bcsar'] = bcsar
+        report += ['voice: ' + r for r in vrep]
+    out[base.split('romfs/')[0] + 'zobj-import-report.txt'] = ('\n'.join(report) + '\n').encode()
+    return out, report
+
+
+def zip_bytes(out):
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as z:
+        for path, data in sorted(out.items()):
+            z.writestr(path, data)
+    return buf.getvalue()
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument('inputs', nargs='+')
+    ap.add_argument('--romfs', help='your extracted OoT3D romfs folder (required to convert)')
+    ap.add_argument('-o', '--out', help='output .zip or folder (required to convert)')
+    ap.add_argument('--layout', choices=['citra', 'luma', 'romfs'], default='citra')
+    ap.add_argument('--region', choices=list(TITLE_IDS), default='usa')
+    ap.add_argument('--rate', type=int, default=22050)
+    ap.add_argument('--equipment', default='all', help='all, none, or comma-separated keys')
+    ap.add_argument('--list-equipment', action='store_true', help='list the equipment keys and exit')
+    a = ap.parse_args()
+
+    files = {}
+    for inp in a.inputs:
+        if os.path.isdir(inp):
+            for k, v in voice.read_files(inp).items():
+                files.update(expand(os.path.basename(inp.rstrip('/\\')) + '/' + k, v))
+        else:
+            files.update(expand(os.path.basename(inp), open(inp, 'rb').read()))
+    models, clips, _ = plan(files)
+    if a.list_equipment:
+        for age, opts in equipment_options(models).items():
+            print(age + ':')
+            for key, label, have in opts:
+                print(f'  {key:16} {label}{"" if have else "  (not in this model)"}')
+        return
+    eq = None if a.equipment == 'all' else [] if a.equipment == 'none' else a.equipment.split(',')
+    equipment = {age: eq for age in models}
+    if not a.romfs or not a.out:
+        ap.error('--romfs and -o are required to convert')
+    need = [build.target_zar(age) for age in models] + (['QueenSound.bcsar'] if clips else [])
+    game = {n: open(os.path.join(a.romfs, GAME_FILES[n]), 'rb').read() for n in need}
+
+    out, report = make_mod(files, game, a.rate, a.layout, a.region, equipment=equipment)
+    if a.out.lower().endswith('.zip'):
+        open(a.out, 'wb').write(zip_bytes(out))
+    else:
+        for path, data in out.items():
+            p = os.path.join(a.out, path)
+            os.makedirs(os.path.dirname(p), exist_ok=True)
+            open(p, 'wb').write(data)
+    print('\n'.join(report))
+    print('wrote', a.out)
+
+
+if __name__ == '__main__':
+    main()
