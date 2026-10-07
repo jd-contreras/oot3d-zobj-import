@@ -124,6 +124,12 @@ def biggoron_source(models, paks, choice=None):
         hit = from_pak(src)
         if hit:
             return hit
+    if src is None:  # same default as the adult's own Biggoron: equipment packs first
+        for path, info, _ in paks:
+            if info.get('category') != 'model':
+                hit = from_pak(path)
+                if hit:
+                    return hit
     if 'adult' in models:
         path, data = models['adult']
         lut = build.drawn_lut(zobj.read(data))
