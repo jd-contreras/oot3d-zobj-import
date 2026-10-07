@@ -142,7 +142,9 @@ function renderEquipment() {
         <label><input type="checkbox" value="shield"> Hide shield on back</label>
         <label><input type="checkbox" value="sword"> Hide sword on back</label>
         <span class="muted">Still shown when held. For long hair or a cape they would clip into.</span>
-      </div>`;
+      </div>
+      ${age === 'child' ? `<label class="child-bgs"><input type="checkbox" class="child-biggoron"> Import child Biggoron Sword
+        <span class="muted">(the adult model's Biggoron Sword, held right side up, replaces the pedestal Master Sword the game also uses for a child holding the Biggoron Sword)</span></label>` : ''}`;
     const sel = fs.querySelector('select.main');
     for (const p of paths) {
       const o = document.createElement('option');
@@ -243,6 +245,7 @@ $('convert').addEventListener('click', async () => {
     options: {
       rate: RATE, layout: $('layout').value, region: $('region').value, equipment: equipmentChoice(),
       main: { ...mainChoice },
+      childBiggoron: !!document.querySelector('.child-biggoron:checked'),
       hideBack: Object.fromEntries([...document.querySelectorAll('fieldset.equip')].map(
         fs => [fs.dataset.age, [...fs.querySelectorAll('.hide-back input:checked')].map(i => i.value)])),
     },

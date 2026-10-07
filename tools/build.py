@@ -372,6 +372,12 @@ def equipment_sources(L, paks, age):
     return out
 
 
+def drawn_lut(m):
+    """The model's LUT without stub entries: display lists that draw nothing (an author leaving an
+    item out) count as missing, so that item falls back to another source or OoT3D's."""
+    return {name: addr for name, addr in zobj.lut(m).items() if zobj.dl_tris(m, addr, 0)}
+
+
 def default_source(srcs, donors=()):
     """Equipment packs win over the model's own items; otherwise the model; then another player model
     (donors: ids of other models lending equipment); otherwise OoT3D's."""
@@ -389,7 +395,7 @@ def equipment_options(zobj_src, paks=()):
     m = zobj.read(zobj_src)
     use_profile(CHILD if zobj.is_child(m) else ADULT)
     age = 'child' if zobj.is_child(m) else 'adult'
-    srcs = equipment_sources(zobj.lut(m), list(paks), age)
+    srcs = equipment_sources(drawn_lut(m), list(paks), age)
     donors = {pid for pid, info, _ in paks if info.get('category') == 'model'}
     return [(k, v, srcs[k], default_source(srcs[k], donors)) for k, v in EQUIPMENT_LABELS.items() if k in srcs]
 
@@ -406,7 +412,13 @@ def back_kind(key, comps):
     return None
 
 
-def convert(zobj_src, zar_src, equipment=None, paks=(), hide_back=()):
+# Child Link's pedestal Master Sword group is also what the game draws for a child wielding the
+# Biggoron Sword. ModLoader64's option puts the adult Biggoron Sword there, held right side up.
+CHILD_BIGGORON_GROUP = 16
+BIGGORON_PARTS = ('LONGSWORD_HILT', 'LONGSWORD_BLADE')
+
+
+def convert(zobj_src, zar_src, equipment=None, paks=(), hide_back=(), child_biggoron=None):
     """Convert one zobj. zobj_src / zar_src: paths or bytes (zar = Link's original archive of the same
     age). paks: equipment sources [(id, equippak.parse() result, zobj bytes)]: equipment packs, or
     other player models of the same age (category 'model'; pack.as_equipment).
@@ -414,12 +426,14 @@ def convert(zobj_src, zar_src, equipment=None, paks=(), hide_back=()):
     the rest OoT3D's), or {key: 'model' | 'oot3d' | pack id}.
     hide_back: back items to leave off, {'shield', 'sword'} (still shown in hand), e.g. for long hair
     or a cape they would clip into.
+    child_biggoron: (adult zobj or pack bytes, {LONGSWORD_HILT / LONGSWORD_BLADE: address}, name) for a
+    child model: the adult Biggoron Sword replaces the pedestal Master Sword (CHILD_BIGGORON_GROUP).
     Returns {'name': romfs/actor file name, 'zar': bytes, 'cmb': bytes}."""
     m = zobj.read(zobj_src)
     use_profile(CHILD if zobj.is_child(m) else ADULT)
     age = 'child' if zobj.is_child(m) else 'adult'
     log('%s model -> %s' % (age, ZAR_NAME))
-    L = zobj.lut(m)
+    L = drawn_lut(m)
     paks = [pk for pk in paks if pk[1]['dls'].get(age)]
     srcs = equipment_sources(L, paks, age)
     donors = {pid for pid, info, _ in paks if info.get('category') == 'model'}
@@ -444,6 +458,18 @@ def convert(zobj_src, zar_src, equipment=None, paks=(), hide_back=()):
                 if part in pak_dls[src]:
                     override[part] = (pak_models[src], pak_dls[src][part])
     names = {pid: info['name'] or pid for pid, info, _ in paks}
+    items = dict(ITEMS)
+    if child_biggoron and age == 'child':
+        bdata, bdls, bname = child_biggoron
+        bmodel = zobj.Model(bdata, m.limbs, mtx_limb=m.mtx_limb)
+        for part in BIGGORON_PARTS:
+            override[part] = (bmodel, bdls[part])
+        items[CHILD_BIGGORON_GROUP] = [
+            (key, [('LONGSWORD_HILT', 15), ('LONGSWORD_BLADE', 15)], mats) if key == 'master_sword' else (key, comps, mats)
+            for key, comps, mats in ITEMS[CHILD_BIGGORON_GROUP]]
+        ported.add('master_sword')
+        choice['master_sword'] = 'biggoron'
+        names['biggoron'] = f'adult Biggoron Sword ({bname})'
     for k in EQUIPMENT_LABELS:
         if k in choice:
             src = choice[k]
@@ -499,7 +525,7 @@ def convert(zobj_src, zar_src, equipment=None, paks=(), hide_back=()):
         return out
 
     group_tris = {g: [tr for src in srcs for tr in dl(*src)] for g, srcs in GROUPS.items()}
-    for g, ents in ITEMS.items():
+    for g, ents in items.items():
         group_tris[g] = [tr for key, comps, _ in ents
                          if (key is None or key in ported) and back_kind(key, comps) not in hide_back
                          for src in comps for tr in dl(*src)]

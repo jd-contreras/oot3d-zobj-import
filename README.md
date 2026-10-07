@@ -27,6 +27,10 @@ ModLoader64's default N64 items.
 adult `.pak` files). Pick the main model, and the others can lend any of their items, just like
 ModLoader64 lets you mix models and equipment.
 
+**Import child Biggoron Sword:** like ModLoader64's option, the adult model's Biggoron Sword (held
+right side up) replaces child Link's pedestal Master Sword, which the game also draws for a child
+holding the Biggoron Sword.
+
 **Hide shield on back / Hide sword on back:** two options (tick either or both) for long hair or
 a cape the items would clip into. They're left off the back but still show when held. Back items a
 model hides itself (ModLoader64's zero-scale back matrix) stay hidden; equipment-pack items show on
@@ -61,7 +65,7 @@ python tools/pack.py Model_A.pak Model_B.pak --main "Model A" --equipment "maste
 
 Options: `--layout citra|luma|romfs`, `--region usa|eur|jpn`,
 `--equipment all|none|key,key...|key=source,...` (source: `model`, `oot3d`, an equipment pack's name
-or another model's name), `--main NAME` (with several models of one age),
+or another model's name), `--main NAME` (with several models of one age), `--child-biggoron`,
 `--hide-back shield`, `--hide-back sword` or `--hide-back shield,sword`.
 
 ## Credits

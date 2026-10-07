@@ -40,15 +40,15 @@ def expand(name, data):
 
 
 def model_name(path):
-    """Display name of a player model: its .pak / .zip / .zobj file name."""
-    first = path.replace('\\', '/').split('/')[0]
-    return os.path.splitext(first)[0].replace('_', ' ')
+    """Display name of a player model: its .zobj file name (packs often hold several models)."""
+    last = path.replace('\\', '/').split('/')[-1]
+    return os.path.splitext(last)[0].replace('_', ' ')
 
 
 def as_equipment(path, data, age):
     """A second player model used as an equipment source: its display lists, shaped like a pack."""
     info = {'name': model_name(path) + ' (model)', 'category': 'model', 'unused': [],
-            'dls': {age: zobj.lut(zobj.read(data))}}
+            'dls': {age: build.drawn_lut(zobj.read(data))}}
     return path, info, data
 
 
@@ -100,14 +100,44 @@ def pak_names(paks):
     return {path: info['name'] or os.path.basename(path) for path, info, _ in paks}
 
 
+def biggoron_source(models, paks, choice=None):
+    """(bytes, {part: address}, name) of the adult Biggoron Sword for the child option: the adult
+    choice's source if it is a pack / another model, else the adult model, else any adult source."""
+    parts = build.BIGGORON_PARTS
+
+    def from_pak(pid):
+        for path, info, data in paks:
+            dls = info['dls'].get('adult', {})
+            if path == pid and all(p in dls for p in parts):
+                return data, {p: dls[p] for p in parts}, info['name'] or model_name(path)
+
+    src = choice.get('biggoron') if isinstance(choice, dict) else None
+    if src and src not in ('model', 'oot3d'):
+        hit = from_pak(src)
+        if hit:
+            return hit
+    if 'adult' in models:
+        path, data = models['adult']
+        lut = build.drawn_lut(zobj.read(data))
+        if all(p in lut for p in parts):
+            return data, {p: lut[p] for p in parts}, model_name(path)
+    for path, _, _ in paks:
+        hit = from_pak(path)
+        if hit:
+            return hit
+    return None
+
+
 def make_mod(files, game, rate=22050, layout='citra', region='usa', decode=None, log=print, equipment=None,
-             hide_back=None, main=None):
+             hide_back=None, main=None, child_biggoron=False):
     """files: {path: bytes} (inputs, already expanded). game: {GAME_FILES name: bytes} (only those
     needed). decode(bytes) -> mono int16 PCM at `rate` (default ffmpeg); audio files may also be
     given already decoded as numpy arrays. equipment: {age: choice} with choice as in
     build.convert (None, [keys] or {key: source}); missing ages use the defaults.
     hide_back: {age: {'shield', 'sword'}} back items to leave off (still shown in hand).
     main: {age: model path} when several models of an age are given (others lend equipment).
+    child_biggoron: the child model holds the adult Biggoron Sword (from the adult model or an
+    adult equipment source) in place of the pedestal Master Sword, as ModLoader64's option does.
     Returns ({output path: bytes}, report lines)."""
     models, clips, report, paks, _ = plan(files, main)
     if not models and not clips:
@@ -124,7 +154,13 @@ def make_mod(files, game, rate=22050, layout='citra', region='usa', decode=None,
         if need not in game:
             raise ValueError(f'{need} from your OoT3D romfs (actor/{need}) is needed for the {age} model')
         log(f'converting {age} model {path}')
-        res = build.convert(data, game[need], (equipment or {}).get(age), paks, (hide_back or {}).get(age, ()))
+        bgs = None
+        if age == 'child' and child_biggoron:
+            bgs = biggoron_source(models, paks, (equipment or {}).get('adult'))
+            if bgs is None:
+                log('child Biggoron Sword: no adult model or adult Biggoron Sword in the inputs, skipped')
+                report.append('child Biggoron Sword skipped (needs an adult model or adult Biggoron Sword)')
+        res = build.convert(data, game[need], (equipment or {}).get(age), paks, (hide_back or {}).get(age, ()), bgs)
         out[base + 'actor/' + res['name']] = res['zar']
         report.append(f'{age}: {path} -> romfs/actor/{res["name"]}')
     if clips:
@@ -161,6 +197,8 @@ def main():
     ap.add_argument('--main', action='append', default=[], metavar='NAME',
                     help='with several models of one age: the one to convert (file or model name); '
                          'the others lend their equipment')
+    ap.add_argument('--child-biggoron', action='store_true',
+                    help="the child model holds the adult model's Biggoron Sword (replaces the pedestal Master Sword)")
     ap.add_argument('--hide-back', default='', metavar='shield,sword',
                     help='leave these off the back (still shown in hand), e.g. for long hair or a cape')
     a = ap.parse_args()
@@ -213,7 +251,7 @@ def main():
 
     out, report = make_mod(files, game, a.rate, a.layout, a.region, equipment=equipment,
                            hide_back={age: {x for x in a.hide_back.split(',') if x} for age in models},
-                           main=main)
+                           main=main, child_biggoron=a.child_biggoron)
     if a.out.lower().endswith('.zip'):
         open(a.out, 'wb').write(zip_bytes(out))
     else:

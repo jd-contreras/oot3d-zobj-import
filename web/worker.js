@@ -85,7 +85,7 @@ out, report = pack.make_mod(files, game, opts['rate'], opts['layout'], opts['reg
                             decode=lambda d: decoded[d], log=js_log,
                             equipment={age: None if v == 'all' else v for age, v in (opts.get('equipment') or {}).items()},
                             hide_back={age: set(kinds) for age, kinds in (opts.get('hideBack') or {}).items()},
-                            main=opts.get('main') or {})
+                            main=opts.get('main') or {}, child_biggoron=bool(opts.get('childBiggoron')))
 from pyodide.ffi import to_js
 to_js([memoryview(pack.zip_bytes(out)), '\\n'.join(report)])
 `);

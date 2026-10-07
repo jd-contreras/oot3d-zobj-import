@@ -101,3 +101,5 @@ fieldset.equip p { font-size: 0.9rem; margin: 8px 0; }
 fieldset.equip .hide-back { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 12px; }
 fieldset.equip .hide-back .muted { flex-basis: 100%; font-size: 0.9rem; }
 fieldset.equip .main-model { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; font-weight: 600; }
+fieldset.equip .child-bgs { display: block; margin-top: 12px; }
+fieldset.equip .child-bgs .muted { font-size: 0.9rem; }

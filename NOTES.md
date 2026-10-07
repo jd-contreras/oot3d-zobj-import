@@ -210,3 +210,8 @@ python tools/pose.py <player.zobj> <link_v2.cmb> out/<name>   # writes .obj + .p
 - Several models of one age: `pack.plan(files, main)` converts the main one and turns the others
   into equipment sources shaped like packs (`pack.as_equipment`, category 'model', dls = their LUT).
   They are offered for every item but never the default (packs first, then the main model).
+- Child Biggoron Sword option: child group 16 (pedestal Master Sword, also the child Biggoron) gets
+  the adult LONGSWORD_HILT + LONGSWORD_BLADE in the left hand; the adult grip holds it right side up
+  (child MASTER_SWORD blade centre x = -549 in the hand frame, adult Biggoron +3236).
+- Stub display lists (setup commands, no triangles; e.g. Aria's adult BOW) count as missing
+  (`build.drawn_lut`), so the item falls back to another source or OoT3D's instead of vanishing.
