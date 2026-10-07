@@ -79,12 +79,25 @@ def _anod(bone, rot16, tracks):
     return b'anod' + struct.pack('<HH9HH', bone, rot16, *offs, 0) + body
 
 
-def _linear(values, rot16):
-    n = len(values)
-    head = struct.pack('<IIII', 1, n, 0, n - 1)
+# OoT3D only animates through hermite tracks (its linear tracks are single-key constants, and
+# multi-key linear rotations are read as zero). Tangent units, measured on the game's own curves
+# against central differences: int16 rotations 2 x (binary-angle units per frame), float
+# translations (units per frame) / 40.
+ROT_TANGENT, TRANS_TANGENT = 2.0, 1 / 40
+
+
+def _hermite(values, rot16):
+    """One key per frame. values: rotations as continuous int16 binary angles, or translations."""
+    v = np.asarray(values, float)
+    n = len(v)
+    slope = np.gradient(v) if n > 1 else np.zeros(1)
+    head = struct.pack('<IIII', 2, n, 0, max(n - 1, 0))
     if rot16:
-        return head + b''.join(struct.pack('<Hh', i, int(v)) for i, v in enumerate(values))
-    return head + b''.join(struct.pack('<If', i, float(v)) for i, v in enumerate(values))
+        tan = np.clip(np.round(slope * ROT_TANGENT), -32768, 32767)
+        wrapped = ((np.round(v) + 0x8000) % 0x10000) - 0x8000
+        return head + b''.join(struct.pack('<Hhhh', i, int(a), int(t), int(t)) for i, (a, t) in enumerate(zip(wrapped, tan)))
+    tan = slope * TRANS_TANGENT
+    return head + b''.join(struct.pack('<Ifff', i, float(a), float(t), float(t)) for i, (a, t) in enumerate(zip(v, tan)))
 
 
 def _write(orig, anods):
@@ -139,13 +152,11 @@ def convert_csab(orig, zdata, n64_name, bones, age):
         tracks = {a: t for a, t in (blobs[b][2].items() if b in blobs else ()) if a[0] != 'r'}
         ang = np.unwrap(euler[b], axis=0)
         for k, a in enumerate(('rx', 'ry', 'rz')):
-            v = np.round(ang[:, k] * ROT16)
-            v = ((v + 0x8000) % 0x10000) - 0x8000  # int16 binary angles
-            tracks[a] = _linear(v, True)
+            tracks[a] = _hermite(ang[:, k] * ROT16, True)
         if b == 1:  # root translation from the N64 root
             for k, a in enumerate(('tx', 'ty', 'tz')):
                 scale, offset = root[k]
-                tracks[a] = _linear(trans[:, k] * scale + offset, False)
+                tracks[a] = _hermite(trans[:, k] * scale + offset, False)
         anods[b] = _anod(b, 1, tracks)
     return _write(orig, anods)
 

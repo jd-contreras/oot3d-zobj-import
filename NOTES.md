@@ -231,6 +231,10 @@ python tools/pose.py <player.zobj> <link_v2.cmb> out/<name>   # writes .obj + .p
   scales sideways root sway to ~0.14), height uses the standing-frame ratio (~1.0).
 - `gen_anim_tables.py` (developer only, needs a ROM) writes `anim_tables.py`: animation list,
   vanilla fingerprints (to find the animations a bank changes) and the fitted tables. No game data.
-- Converted csabs: linear int16 rotation keys per frame (rot16 anods), root translation as linear
-  float keys, other bones' anods copied raw; they go through the usual translation patch.
+- Converted csabs: hermite keys per frame (rot16 anods; int16 rotations, float root translation),
+  other bones' anods copied raw; they go through the usual translation patch. OoT3D never uses
+  multi-key linear tracks (its linear tracks are single-key constants): a first build with linear
+  per-frame keys played as all-zero rotations in game (N64 rest pose). Hermite tangent units,
+  measured on the game's curves: int16 rotation tangent = 2 x slope per frame, float translation
+  tangent = slope / 40; header t0 = 0, t1 = duration - 1.
 - Not yet: the per-frame face index (OoT3D uses separate .faceb files).
