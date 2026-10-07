@@ -8,7 +8,7 @@ const TOOLS = ['build', 'voice', 'pack', 'ml64pak', 'zobj', 'cmb', 'cmbskel', 'p
   'cmabwrite', 'texenc', 'csab', 'zar', 'pica', 'fit', 'tunics', 'csar', 'voicemap', 'dspadpcm', 'equippak',
   'animconv', 'n64anim', 'anim_tables', 'animview', 'cmbview', 'render'];
 
-importScripts(PYODIDE + 'pyodide.js', 'dspadpcm.js?v=20261007b');
+importScripts(PYODIDE + 'pyodide.js', 'dspadpcm.js?v=20261007c');
 self.dspEncode = dspEncode;  // tools/dspadpcm.py picks this up instead of its pure-Python loop
 
 const log = text => postMessage({ type: 'log', text: String(text) });
@@ -98,6 +98,10 @@ to_js([memoryview(pack.zip_bytes(out)), '\\n'.join(report)])
       postMessage({ type: 'done', zip, report }, [zip.buffer]);
     }
   } catch (e) {
-    postMessage({ type: 'error', text: String(e.message || e) });
+    const text = String(e.message || e).trim();
+    const last = text.split('
+').pop();
+    // problems the converter explains itself (ValueError) are shown without the Python traceback
+    postMessage({ type: 'error', text: last.startsWith('ValueError: ') ? last.slice(12) : text });
   }
 };

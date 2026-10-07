@@ -53,6 +53,7 @@ differently than on the N64, and the first-person slingshot can show a small str
 1. Open the site and drop in your `.pak` / `.zip` / `.zobj` files (adult, child, equipment packs and/or a voice pack).
 2. Pick the listed files from your own extracted OoT3D romfs (`actor/zelda_link_boy_new.zar`,
    `actor/zelda_link_child_new.zar`, `sound/QueenSound.bcsar`), or pick the whole romfs folder.
+   Use the original files, not ones from a mods folder (those are already converted).
 3. Choose Citra or 3DS (Luma) and your game region, then **Convert** and download the zip.
    - **Citra:** extract into Citra's `load/mods` folder.
    - **3DS:** extract to the root of the SD card and enable game patching in the Luma3DS config.

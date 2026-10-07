@@ -489,6 +489,9 @@ def convert(zobj_src, zar_src, equipment=None, paks=(), hide_back=(), child_bigg
     _, files = zar.read_zar(zar_bytes)
     files = dict(files)
     t = cmb.read(files[CMB_NAME])
+    if any(x.name.startswith('z') for x in t.textures):  # our added textures are named z0000, zgauntlet, ...
+        raise ValueError(f'{ZAR_NAME} has already been converted by this tool. Use the original file from '
+                         f'your extracted OoT3D romfs (actor/{ZAR_NAME}), not one from a mods folder.')
     bones, world = cmbskel.read_skeleton(t.raw)
     lw, trans, new_world = pose.fit(m, bones, world)
 
