@@ -76,7 +76,7 @@ for (sid, i, name, data), p in zip(clip_list, pcm):
 out, report = pack.make_mod(files, game, opts['rate'], opts['layout'], opts['region'],
                             decode=lambda d: decoded[d], log=js_log,
                             equipment={age: None if v == 'all' else v for age, v in (opts.get('equipment') or {}).items()},
-                            hide_back_shield=[age for age, on in (opts.get('hideBackShield') or {}).items() if on])
+                            hide_back={age: set(kinds) for age, kinds in (opts.get('hideBack') or {}).items()})
 from pyodide.ffi import to_js
 to_js([memoryview(pack.zip_bytes(out)), '\\n'.join(report)])
 `);

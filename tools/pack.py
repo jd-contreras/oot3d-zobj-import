@@ -79,12 +79,12 @@ def pak_names(paks):
 
 
 def make_mod(files, game, rate=22050, layout='citra', region='usa', decode=None, log=print, equipment=None,
-             hide_back_shield=()):
+             hide_back=None):
     """files: {path: bytes} (inputs, already expanded). game: {GAME_FILES name: bytes} (only those
     needed). decode(bytes) -> mono int16 PCM at `rate` (default ffmpeg); audio files may also be
     given already decoded as numpy arrays. equipment: {age: choice} with choice as in
     build.convert (None, [keys] or {key: source}); missing ages use the defaults.
-    hide_back_shield: ages whose shield is hidden on the back (still shown in hand).
+    hide_back: {age: {'shield', 'sword'}} back items to leave off (still shown in hand).
     Returns ({output path: bytes}, report lines)."""
     models, clips, report, paks = plan(files)
     if not models and not clips:
@@ -101,7 +101,7 @@ def make_mod(files, game, rate=22050, layout='citra', region='usa', decode=None,
         if need not in game:
             raise ValueError(f'{need} from your OoT3D romfs (actor/{need}) is needed for the {age} model')
         log(f'converting {age} model {path}')
-        res = build.convert(data, game[need], (equipment or {}).get(age), paks, age in hide_back_shield)
+        res = build.convert(data, game[need], (equipment or {}).get(age), paks, (hide_back or {}).get(age, ()))
         out[base + 'actor/' + res['name']] = res['zar']
         report.append(f'{age}: {path} -> romfs/actor/{res["name"]}')
     if clips:
@@ -135,8 +135,8 @@ def main():
     ap.add_argument('--rate', type=int, default=22050)
     ap.add_argument('--equipment', default='all', help='all, none, or comma-separated keys')
     ap.add_argument('--list-equipment', action='store_true', help='list the equipment keys and exit')
-    ap.add_argument('--hide-back-shield', action='store_true',
-                    help='no shield on the back (still shown in hand), e.g. for long hair or a cape')
+    ap.add_argument('--hide-back', default='', metavar='shield,sword',
+                    help='leave these off the back (still shown in hand), e.g. for long hair or a cape')
     a = ap.parse_args()
 
     files = {}
@@ -176,7 +176,7 @@ def main():
     game = {n: open(os.path.join(a.romfs, GAME_FILES[n]), 'rb').read() for n in need}
 
     out, report = make_mod(files, game, a.rate, a.layout, a.region, equipment=equipment,
-                           hide_back_shield=set(models) if a.hide_back_shield else ())
+                           hide_back={age: {x for x in a.hide_back.split(',') if x} for age in models})
     if a.out.lower().endswith('.zip'):
         open(a.out, 'wb').write(zip_bytes(out))
     else:

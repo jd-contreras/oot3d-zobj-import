@@ -387,17 +387,25 @@ def equipment_options(zobj_src, paks=()):
     return [(k, v, srcs[k], default_source(srcs[k])) for k, v in EQUIPMENT_LABELS.items() if k in srcs]
 
 
-def is_back_shield(comps):
-    """Equipment-list parts that put a shield on the back (drawn on the sheath limb, 19)."""
-    return bool(comps) and all(c[0].startswith('SHIELD') and c[1] == 19 for c in comps)
+def back_kind(key, comps):
+    """'shield' / 'sword' for equipment parts carried on the back (drawn on the sheath limb, 19)."""
+    if key == 'biggoron_back':  # OoT3D's Biggoron scabbard (Link's own meshes only)
+        return 'sword'
+    if comps and all(c[1] == 19 for c in comps):
+        if all(c[0].startswith('SHIELD') for c in comps):
+            return 'shield'
+        if all(c[0].startswith('SWORD') for c in comps):
+            return 'sword'
+    return None
 
 
-def convert(zobj_src, zar_src, equipment=None, paks=(), hide_back_shield=False):
+def convert(zobj_src, zar_src, equipment=None, paks=(), hide_back=()):
     """Convert one zobj. zobj_src / zar_src: paths or bytes (zar = Link's original archive of the same
     age). paks: equipment packs [(id, equippak.parse() result, zobj bytes)].
     equipment: None (every item from a pack or the model, packs first), a list of keys (those items,
     the rest OoT3D's), or {key: 'model' | 'oot3d' | pack id}.
-    hide_back_shield: no shield on the back (still shown in hand), e.g. for long hair or a cape.
+    hide_back: back items to leave off, {'shield', 'sword'} (still shown in hand), e.g. for long hair
+    or a cape they would clip into.
     Returns {'name': romfs/actor file name, 'zar': bytes, 'cmb': bytes}."""
     m = zobj.read(zobj_src)
     use_profile(CHILD if zobj.is_child(m) else ADULT)
@@ -484,7 +492,7 @@ def convert(zobj_src, zar_src, equipment=None, paks=(), hide_back_shield=False):
     group_tris = {g: [tr for src in srcs for tr in dl(*src)] for g, srcs in GROUPS.items()}
     for g, ents in ITEMS.items():
         group_tris[g] = [tr for key, comps, _ in ents
-                         if (key is None or key in ported) and not (hide_back_shield and is_back_shield(comps))
+                         if (key is None or key in ported) and back_kind(key, comps) not in hide_back
                          for src in comps for tr in dl(*src)]
 
     # ---- bow: OoT3D draws the string itself (groups 43/44 on bones 23/24) at Link's bow tips, so
@@ -719,7 +727,7 @@ def convert(zobj_src, zar_src, equipment=None, paks=(), hide_back_shield=False):
             return False
         for key, comps, mats in ITEMS.get(gid, ()):
             if mat in mats:
-                if hide_back_shield and is_back_shield(comps):
+                if back_kind(key, comps) in hide_back:
                     return False
                 return key is not None and key not in ported
         return gid not in ITEMS
