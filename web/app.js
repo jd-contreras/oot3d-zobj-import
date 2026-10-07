@@ -9,7 +9,7 @@ const LAYOUT_HELP = {
 };
 
 const $ = id => document.getElementById(id);
-const worker = new Worker('web/worker.js?v=20261007d');  // bump with index.html's version
+const worker = new Worker('web/worker.js?v=20261007e');  // bump with index.html's version
 const modFiles = new Map();   // name -> File
 const gameFiles = new Map();  // game file name -> File
 let summary = null;           // from the worker's scan
@@ -87,9 +87,17 @@ async function scan() {
   $('download').hidden = true;
   refresh();
   log('Reading mod files...');
-  const inputs = await Promise.all([...modFiles.values()].map(async f => ({
-    name: f.name, data: new Uint8Array(await f.arrayBuffer()),
-  })));
+  let inputs;
+  try {
+    inputs = await Promise.all([...modFiles.values()].map(async f => ({
+      name: f.name, data: new Uint8Array(await f.arrayBuffer()),
+    })));
+  } catch (e) {
+    log('Error: a mod file changed on disk after it was picked. Add it again.');
+    busy = false;
+    refresh();
+    return;
+  }
   worker.postMessage({ type: 'scan', inputs });
 }
 
@@ -231,7 +239,11 @@ function addModFiles(list) {
 }
 
 function addGameFiles(list) {
-  for (const f of list) if (GAME_NAMES.includes(f.name)) gameFiles.set(f.name, f);
+  for (const f of list) {
+    if (!GAME_NAMES.includes(f.name)) continue;
+    if (!f.size) { log(`Skipped ${f.name}: it is empty (0 bytes).`); continue; }
+    gameFiles.set(f.name, f);
+  }
   refresh();
 }
 
@@ -249,7 +261,21 @@ $('convert').addEventListener('click', async () => {
   $('download').hidden = true;
   refresh();
   log('Converting (this can take a few minutes)...');
-  const game = await Promise.all(summary.need.map(async n => [n, new Uint8Array(await gameFiles.get(n).arrayBuffer())]));
+  let game;
+  try {
+    game = await Promise.all(summary.need.map(async n => {
+      const f = gameFiles.get(n);
+      if (!f.size) throw new Error(`${n} is empty (0 bytes). Pick the original from your extracted OoT3D romfs (actor/${n}).`);
+      return [n, new Uint8Array(await f.arrayBuffer())];
+    }));
+  } catch (e) {
+    // e.g. the file was moved, renamed or changed on disk after it was picked
+    log('Error: ' + (e.name === 'NotFoundError' || e.name === 'NotReadableError'
+      ? 'a game file changed on disk after it was picked. Pick it again.' : e.message));
+    busy = false;
+    refresh();
+    return;
+  }
   worker.postMessage({
     type: 'convert', game, clips,
     options: {

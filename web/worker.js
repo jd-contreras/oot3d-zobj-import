@@ -8,7 +8,7 @@ const TOOLS = ['build', 'voice', 'pack', 'ml64pak', 'zobj', 'cmb', 'cmbskel', 'p
   'cmabwrite', 'texenc', 'csab', 'zar', 'pica', 'fit', 'tunics', 'csar', 'voicemap', 'dspadpcm', 'equippak',
   'animconv', 'n64anim', 'anim_tables', 'animview', 'cmbview', 'render'];
 
-importScripts(PYODIDE + 'pyodide.js', 'dspadpcm.js?v=20261007d');
+importScripts(PYODIDE + 'pyodide.js', 'dspadpcm.js?v=20261007e');
 self.dspEncode = dspEncode;  // tools/dspadpcm.py picks this up instead of its pure-Python loop
 
 const log = text => postMessage({ type: 'log', text: String(text) });
