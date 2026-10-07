@@ -30,7 +30,7 @@ ModLoader64 lets you mix models and equipment.
 
 **Biggoron Sword on the back:** player models have no Biggoron Sword for the back, so by default
 the model's Master Sword sheath is used, with the Biggoron hilt in it when sheathed. Tick **Use
-OoT3D Biggoron scabbard** to keep OoT3D's big scabbard instead.
+OoT3D Biggoron scabbard** to use OoT3D's big scabbard instead (your Biggoron hilt still shows in it).
 
 **Import child Biggoron Sword:** like ModLoader64's option, the adult model's Biggoron Sword (held
 right side up) replaces child Link's pedestal Master Sword, which the game also draws for a child

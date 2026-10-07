@@ -58,6 +58,7 @@ HYLIAN_BACK = ('hylian_shield', [('SHIELD_HYLIAN', 19, SHIELD_BACK)], {34})
 MIRROR_BACK = ('mirror_shield', [('SHIELD_MIRROR', 19, SHIELD_BACK)], {31, 32})
 BIGGORON = {7, 8, 9, 10, 11, 12}
 BG_EMPTY = ('biggoron_back', [('SWORD_SHEATH', 19)], {30})
+BIGGORON_SCABBARD = 'biggoron scabbard'  # placement tag: Biggoron hilt in OoT3D's scabbard
 BG_SHEATHED = ('biggoron_back', [('SWORD_SHEATH', 19), ('LONGSWORD_HILT', 19, SWORD_BACK)], {30} | BIGGORON)
 ITEMS = {
     0: [MS_SHEATHED, HYLIAN_BACK], 1: [MS_SHEATH, HYLIAN_BACK],
@@ -406,12 +407,12 @@ def equipment_options(zobj_src, paks=()):
 
 def back_kind(key, comps):
     """'shield' / 'sword' for equipment parts carried on the back (drawn on the sheath limb, 19)."""
-    if key == 'biggoron_back':  # OoT3D's Biggoron scabbard (Link's own meshes only)
+    if key in ('biggoron_back', 'biggoron_scabbard'):  # the Biggoron on the back / its scabbard
         return 'sword'
     if comps and all(c[1] == 19 for c in comps):
         if all(c[0].startswith('SHIELD') for c in comps):
             return 'shield'
-        if all(c[0].startswith('SWORD') for c in comps):
+        if all(c[0].startswith(('SWORD', 'LONGSWORD')) for c in comps):
             return 'sword'
     return None
 
@@ -470,6 +471,15 @@ def convert(zobj_src, zar_src, equipment=None, paks=(), hide_back=(), child_bigg
                     override[part] = (pak_models[src], pak_dls[src][part])
     names = {pid: info['name'] or pid for pid, info, _ in paks}
     items = dict(ITEMS)
+    if oot3d_scabbard and 'biggoron' in ported:
+        # OoT3D's scabbard stays (material 30); the chosen Biggoron hilt goes where Link's sits in it
+        for g, ents in ITEMS.items():
+            if any(key == 'biggoron_back' for key, _, _ in ents):
+                sheathed = any(key == 'biggoron_back' and len(comps) > 1 for key, comps, _ in ents)
+                bg = [('biggoron_scabbard', [], {30})]
+                if sheathed:
+                    bg.insert(0, ('biggoron', [('LONGSWORD_HILT', 19, BIGGORON_SCABBARD)], BIGGORON))
+                items[g] = [e for e in ents if e[0] != 'biggoron_back'] + bg
     if child_biggoron and age == 'child':
         bdata, bdls, bname = child_biggoron
         bmodel = zobj.Model(bdata, m.limbs, mtx_limb=m.mtx_limb)
@@ -520,7 +530,10 @@ def convert(zobj_src, zar_src, equipment=None, paks=(), hide_back=(), child_bigg
                     tr.gauntlet = True
         if mtx is None:
             return tris
-        M = n64_mtx(mtx)  # row-vector convention: v' = v @ M (only for vertices in `limb` space)
+        if mtx == BIGGORON_SCABBARD:
+            M = biggoron_scabbard_mtx()
+        else:
+            M = n64_mtx(mtx)  # row-vector convention: v' = v @ M (only for vertices in `limb` space)
         if abs(np.linalg.det(M[:3, :3])) < 1e-6:  # zero-scale back matrix: the model hides this item
             if src_model is m or mtx not in BACK_MTX_DEFAULT:
                 return []
@@ -538,15 +551,24 @@ def convert(zobj_src, zar_src, equipment=None, paks=(), hide_back=(), child_bigg
             out.append(with_verts(tr, vs))
         return out
 
-    group_tris = {g: [tr for src in srcs for tr in dl(*src)] for g, srcs in GROUPS.items()}
-    for g, ents in items.items():
-        group_tris[g] = [tr for key, comps, _ in ents
-                         if (key is None or key in ported) and back_kind(key, comps) not in hide_back
-                         for src in comps for tr in dl(*src)]
-
-    # ---- bow: OoT3D draws the string itself (groups 43/44 on bones 23/24) at Link's bow tips, so
-    # the zobj bow is fitted onto Link's bow (tips + grip); the hand follows by the grip offset.
     inv_world = [np.linalg.inv(wm) for wm in world]
+
+    scabbard_cache = []
+
+    def biggoron_scabbard_mtx():
+        """Row-vector matrix taking a Biggoron hilt from left-hand space to where Link's Biggoron
+        sits in his back scabbard (fitted on Link's own hilt: in hand, group 37 -> on back, 12)."""
+        if not scabbard_cache:
+            mats = sorted(BIGGORON - {9, 12})  # hilt parts present in both copies
+            src = [link_mesh_points(37, mt, 16, with_uv=True) for mt in mats]
+            dst = [link_mesh_points(12, mt, 21, with_uv=True) for mt in mats]
+            r, tr_, _ = fit.icp(np.concatenate([p for p, _ in src]), np.concatenate([p for p, _ in dst]),
+                                src_uv=np.concatenate([u for _, u in src]), dst_uv=np.concatenate([u for _, u in dst]))
+            M = np.eye(4)
+            M[:3, :3] = r.T
+            M[3, :3] = tr_
+            scabbard_cache.append(M)
+        return scabbard_cache[0]
 
     def link_mesh_points(group, mat, bone, with_uv=False):
         pts, uvs = [], []
@@ -559,6 +581,15 @@ def convert(zobj_src, zar_src, equipment=None, paks=(), hide_back=(), child_bigg
                         pts.append((inv_world[bone] @ wp)[:3])
                         uvs.append(v['uv'])
         return (np.array(pts), np.array(uvs)) if with_uv else np.array(pts)
+
+    group_tris = {g: [tr for src in srcs for tr in dl(*src)] for g, srcs in GROUPS.items()}
+    for g, ents in items.items():
+        group_tris[g] = [tr for key, comps, _ in ents
+                         if (key is None or key in ported) and back_kind(key, comps) not in hide_back
+                         for src in comps for tr in dl(*src)]
+
+    # ---- bow: OoT3D draws the string itself (groups 43/44 on bones 23/24) at Link's bow tips, so
+    # the zobj bow is fitted onto Link's bow (tips + grip); the hand follows by the grip offset.
 
     def aim_pose():
         """Bone world matrices (refit skeleton) in the first-person bow aiming animation."""

@@ -241,3 +241,6 @@ python tools/pose.py <player.zobj> <link_v2.cmb> out/<name>   # writes .obj + .p
 - Biggoron on the back (adult groups 7-12, Link's scabbard material 30 + Biggoron 7-12): by
   default SWORD_SHEATH (+ LONGSWORD_HILT at the sword back matrix when sheathed: 8, 11, 12) from the
   Master Sword / Biggoron sources; needs both items ported. `oot3d_scabbard` keeps Link's.
+- `oot3d_scabbard`: Link's scabbard (material 30) stays, the chosen LONGSWORD_HILT is placed where
+  Link's Biggoron sits in it: the hand-to-back transform is fitted on Link's own hilt (group 37 in
+  bone 16 -> group 12 in bone 21; exact, rms 0.0, ~178 deg) and applied to the hilt's hand-space DL.

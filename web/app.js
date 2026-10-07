@@ -9,7 +9,7 @@ const LAYOUT_HELP = {
 };
 
 const $ = id => document.getElementById(id);
-const worker = new Worker('web/worker.js?v=20261007e');  // bump with index.html's version
+const worker = new Worker('web/worker.js?v=20261007f');  // bump with index.html's version
 const modFiles = new Map();   // name -> File
 const gameFiles = new Map();  // game file name -> File
 let summary = null;           // from the worker's scan
@@ -160,7 +160,7 @@ function renderEquipment() {
         <span class="muted">Still shown when held. For long hair or a cape they would clip into.</span>
       </div>
       ${age === 'adult' ? `<label class="child-bgs"><input type="checkbox" class="oot3d-scabbard"> Use OoT3D Biggoron scabbard
-        <span class="muted">(default: the model's Master Sword sheath, with the Biggoron hilt in it when sheathed)</span></label>` : ''}
+        <span class="muted">(the Biggoron hilt still comes from your choice; default: the model's Master Sword sheath)</span></label>` : ''}
       ${age === 'child' ? `<label class="child-bgs"><input type="checkbox" class="child-biggoron"> Import child Biggoron Sword
         <span class="muted">(the adult model's Biggoron Sword, held right side up, replaces the pedestal Master Sword the game also uses for a child holding the Biggoron Sword)</span></label>` : ''}`;
     const sel = fs.querySelector('select.main');
