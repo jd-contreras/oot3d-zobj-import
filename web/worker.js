@@ -5,7 +5,8 @@
 //               | {type: 'error', text}
 const PYODIDE = 'https://cdn.jsdelivr.net/pyodide/v0.29.3/full/';
 const TOOLS = ['build', 'voice', 'pack', 'ml64pak', 'zobj', 'cmb', 'cmbskel', 'pose', 'cmbwrite',
-  'cmabwrite', 'texenc', 'csab', 'zar', 'pica', 'fit', 'tunics', 'csar', 'voicemap', 'dspadpcm', 'equippak'];
+  'cmabwrite', 'texenc', 'csab', 'zar', 'pica', 'fit', 'tunics', 'csar', 'voicemap', 'dspadpcm', 'equippak',
+  'animconv', 'n64anim', 'anim_tables', 'animview', 'cmbview', 'render'];
 
 importScripts(PYODIDE + 'pyodide.js', 'dspadpcm.js');
 self.dspEncode = dspEncode;  // tools/dspadpcm.py picks this up instead of its pure-Python loop
@@ -59,6 +60,7 @@ for age, paths in cands.items():
 {'models': {age: list(paths) for age, paths in cands.items()},
  'modelNames': {p: pack.model_name(p) for paths in cands.values() for p in paths},
  'need': need, 'notes': notes, 'equipment': equipment, 'paks': names,
+ 'anims': (lambda b: {'path': b[0], 'changed': b[2]} if b else None)(pack.anim_bank(files)),
  'clips': [('%04X' % sid, name) for sid, i, name, _ in clip_list]}
 `);
       const summary = res.toJs({ dict_converter: Object.fromEntries });
@@ -85,7 +87,8 @@ out, report = pack.make_mod(files, game, opts['rate'], opts['layout'], opts['reg
                             decode=lambda d: decoded[d], log=js_log,
                             equipment={age: None if v == 'all' else v for age, v in (opts.get('equipment') or {}).items()},
                             hide_back={age: set(kinds) for age, kinds in (opts.get('hideBack') or {}).items()},
-                            main=opts.get('main') or {}, child_biggoron=bool(opts.get('childBiggoron')))
+                            main=opts.get('main') or {}, child_biggoron=bool(opts.get('childBiggoron')),
+                            animations=bool(opts.get('animations', True)))
 from pyodide.ffi import to_js
 to_js([memoryview(pack.zip_bytes(out)), '\\n'.join(report)])
 `);

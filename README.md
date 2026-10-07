@@ -17,6 +17,7 @@ no game files are included: you supply them from your own copy of OoT3D.
 | Equipment (swords, shields, bow / slingshot, hookshot, ocarina, bottle, gauntlets, boots, ...) | from the model, equipment packs or OoT3D, per item | same |
 | First-person arms | yes | yes |
 | Voice packs (ML64 `sounds/<id>/` clips) | yes | yes |
+| Custom animations (ML64 `link_animetion.zdata`) | yes (changed ones only) | yes |
 
 **Equipment packs** (ModLoader64 / Z64Online equipment `.pak` files) work too: add them next to
 a model and pick, per item, whether it comes from the model, a pack, or OoT3D. Anything you don't
@@ -30,6 +31,10 @@ ModLoader64 lets you mix models and equipment.
 **Import child Biggoron Sword:** like ModLoader64's option, the adult model's Biggoron Sword (held
 right side up) replaces child Link's pedestal Master Sword, which the game also draws for a child
 holding the Biggoron Sword.
+
+**Custom animations:** if a pack includes a ModLoader64 animation bank (`link_animetion.zdata`),
+the animations it changes from the original game are converted onto OoT3D's skeleton and replace
+OoT3D's versions; every other animation stays OoT3D's own. No ROM is needed.
 
 **Hide shield on back / Hide sword on back:** two options (tick either or both) for long hair or
 a cape the items would clip into. They're left off the back but still show when held. Back items a
@@ -65,7 +70,7 @@ python tools/pack.py Model_A.pak Model_B.pak --main "Model A" --equipment "maste
 
 Options: `--layout citra|luma|romfs`, `--region usa|eur|jpn`,
 `--equipment all|none|key,key...|key=source,...` (source: `model`, `oot3d`, an equipment pack's name
-or another model's name), `--main NAME` (with several models of one age), `--child-biggoron`,
+or another model's name), `--main NAME` (with several models of one age), `--child-biggoron`, `--no-animations`,
 `--hide-back shield`, `--hide-back sword` or `--hide-back shield,sword`.
 
 ## Credits
@@ -74,6 +79,7 @@ or another model's name), `--main NAME` (with several models of one age), `--chi
   [hylian-modding/Z64-CustomPlayerModels](https://github.com/hylian-modding/Z64-CustomPlayerModels)
 - OoT3D model, animation and archive format references: [noclip.website](https://github.com/magcius/noclip.website)
 - OoT3D behaviour and randomizer compatibility: [gamestabled/OoT3D_Randomizer](https://github.com/gamestabled/OoT3D_Randomizer)
+- N64 animation layout (link_animetion): [zeldaret/oot](https://github.com/zeldaret/oot)
 - Python in the browser: [Pyodide](https://pyodide.org)
 
 Format notes and the history of how each piece was worked out are in [NOTES.md](NOTES.md).

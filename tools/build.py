@@ -15,7 +15,7 @@ import numpy as np
 from PIL import Image
 
 sys.path.insert(0, os.path.dirname(__file__))
-import zobj, cmb, cmbskel, pose, cmbwrite, cmabwrite, texenc, csab, zar, pica, fit
+import zobj, cmb, cmbskel, pose, cmbwrite, cmabwrite, texenc, csab, zar, pica, fit, animconv
 from tunics import TUNICS
 
 CMB_NAME = 'boy/model/link_v2.cmb'
@@ -418,7 +418,7 @@ CHILD_BIGGORON_GROUP = 16
 BIGGORON_PARTS = ('LONGSWORD_HILT', 'LONGSWORD_BLADE')
 
 
-def convert(zobj_src, zar_src, equipment=None, paks=(), hide_back=(), child_biggoron=None):
+def convert(zobj_src, zar_src, equipment=None, paks=(), hide_back=(), child_biggoron=None, anims=None):
     """Convert one zobj. zobj_src / zar_src: paths or bytes (zar = Link's original archive of the same
     age). paks: equipment sources [(id, equippak.parse() result, zobj bytes)]: equipment packs, or
     other player models of the same age (category 'model'; pack.as_equipment).
@@ -426,6 +426,7 @@ def convert(zobj_src, zar_src, equipment=None, paks=(), hide_back=(), child_bigg
     the rest OoT3D's), or {key: 'model' | 'oot3d' | pack id}.
     hide_back: back items to leave off, {'shield', 'sword'} (still shown in hand), e.g. for long hair
     or a cape they would clip into.
+    anims: an ML64 animation bank (link_animetion .zdata): its changed animations replace OoT3D's.
     child_biggoron: (adult zobj or pack bytes, {LONGSWORD_HILT / LONGSWORD_BLADE: address}, name) for a
     child model: the adult Biggoron Sword replaces the pedestal Master Sword (CHILD_BIGGORON_GROUP).
     Returns {'name': romfs/actor file name, 'zar': bytes, 'cmb': bytes}."""
@@ -820,6 +821,10 @@ def convert(zobj_src, zar_src, equipment=None, paks=(), hide_back=(), child_bigg
         tint = [[c[k] / 255 for k in range(3)] for c in TUNICS.values()]
         cmabs[BODY_CMAB] = cmabwrite.write([(MAT_TUNIC, [0, 1, 2])], cmab_textures(files[BODY_CMAB]), 3,
                                            const_colors=[(i, TINT_CONST, tint) for i in tunic_mats])
+    if anims is not None:
+        new_anims = animconv.convert_all(files, anims, bones, age, log=log)
+        files.update(new_anims)
+        cmabs.update(new_anims)  # written even if the translation patch leaves them alone
     return finish(out_cmb, cmabs, files, bones, trans, zar_bytes, keep, new_meshes, materials, textures)
 
 

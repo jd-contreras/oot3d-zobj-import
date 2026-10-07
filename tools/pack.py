@@ -14,7 +14,7 @@ import sys, os, io, zipfile, argparse
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(__file__))
-import build, voice, ml64pak, equippak, zobj
+import build, voice, ml64pak, equippak, zobj, animconv
 
 TITLE_IDS = {'usa': '0004000000033500', 'eur': '0004000000033600', 'jpn': '0004000000033400'}
 GAME_FILES = {  # file name -> path inside the romfs
@@ -100,6 +100,14 @@ def pak_names(paks):
     return {path: info['name'] or os.path.basename(path) for path, info, _ in paks}
 
 
+def anim_bank(files):
+    """(path, bytes, [changed N64 animation names]) of the first ML64 animation bank (.zdata), or None."""
+    for path, data in sorted(files.items()):
+        if path.lower().endswith('.zdata') and animconv.is_anim_bank(data):
+            return path, data, animconv.changed(data)
+    return None
+
+
 def biggoron_source(models, paks, choice=None):
     """(bytes, {part: address}, name) of the adult Biggoron Sword for the child option: the adult
     choice's source if it is a pack / another model, else the adult model, else any adult source."""
@@ -129,13 +137,14 @@ def biggoron_source(models, paks, choice=None):
 
 
 def make_mod(files, game, rate=22050, layout='citra', region='usa', decode=None, log=print, equipment=None,
-             hide_back=None, main=None, child_biggoron=False):
+             hide_back=None, main=None, child_biggoron=False, animations=True):
     """files: {path: bytes} (inputs, already expanded). game: {GAME_FILES name: bytes} (only those
     needed). decode(bytes) -> mono int16 PCM at `rate` (default ffmpeg); audio files may also be
     given already decoded as numpy arrays. equipment: {age: choice} with choice as in
     build.convert (None, [keys] or {key: source}); missing ages use the defaults.
     hide_back: {age: {'shield', 'sword'}} back items to leave off (still shown in hand).
     main: {age: model path} when several models of an age are given (others lend equipment).
+    animations: use an included ML64 animation bank's changed animations (link_animetion .zdata).
     child_biggoron: the child model holds the adult Biggoron Sword (from the adult model or an
     adult equipment source) in place of the pedestal Master Sword, as ModLoader64's option does.
     Returns ({output path: bytes}, report lines)."""
@@ -146,6 +155,9 @@ def make_mod(files, game, rate=22050, layout='citra', region='usa', decode=None,
     base = {'citra': f'{tid}/romfs/', 'luma': f'luma/titles/{tid}/romfs/', 'romfs': 'romfs/'}[layout]
     out = {}
     build.log = log
+    bank = anim_bank(files) if animations else None
+    if bank:
+        report.append(f'animations: {len(bank[2])} custom from {bank[0]}: ' + ', '.join(bank[2]))
     for age in ('adult', 'child'):
         if age not in models:
             continue
@@ -160,7 +172,8 @@ def make_mod(files, game, rate=22050, layout='citra', region='usa', decode=None,
             if bgs is None:
                 log('child Biggoron Sword: no adult model or adult Biggoron Sword in the inputs, skipped')
                 report.append('child Biggoron Sword skipped (needs an adult model or adult Biggoron Sword)')
-        res = build.convert(data, game[need], (equipment or {}).get(age), paks, (hide_back or {}).get(age, ()), bgs)
+        res = build.convert(data, game[need], (equipment or {}).get(age), paks, (hide_back or {}).get(age, ()), bgs,
+                            bank[1] if bank and bank[2] else None)
         out[base + 'actor/' + res['name']] = res['zar']
         report.append(f'{age}: {path} -> romfs/actor/{res["name"]}')
     if clips:
@@ -197,6 +210,8 @@ def main():
     ap.add_argument('--main', action='append', default=[], metavar='NAME',
                     help='with several models of one age: the one to convert (file or model name); '
                          'the others lend their equipment')
+    ap.add_argument('--no-animations', action='store_true',
+                    help="ignore an included animation bank (link_animetion .zdata)")
     ap.add_argument('--child-biggoron', action='store_true',
                     help="the child model holds the adult model's Biggoron Sword (replaces the pedestal Master Sword)")
     ap.add_argument('--hide-back', default='', metavar='shield,sword',
@@ -251,7 +266,7 @@ def main():
 
     out, report = make_mod(files, game, a.rate, a.layout, a.region, equipment=equipment,
                            hide_back={age: {x for x in a.hide_back.split(',') if x} for age in models},
-                           main=main, child_biggoron=a.child_biggoron)
+                           main=main, child_biggoron=a.child_biggoron, animations=not a.no_animations)
     if a.out.lower().endswith('.zip'):
         open(a.out, 'wb').write(zip_bytes(out))
     else:

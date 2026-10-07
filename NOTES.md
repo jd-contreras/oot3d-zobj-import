@@ -215,3 +215,22 @@ python tools/pose.py <player.zobj> <link_v2.cmb> out/<name>   # writes .obj + .p
   (child MASTER_SWORD blade centre x = -549 in the hand frame, adult Biggoron +3236).
 - Stub display lists (setup commands, no triangles; e.g. Aria's adult BOW) count as missing
   (`build.drawn_lut`), so the item falls back to another source or OoT3D's instead of vanishing.
+
+## Animations (ML64 link_animetion .zdata -> OoT3D .csab)
+
+- link_animetion: 573 animations (zeldaret/oot link_animetion.xml), 134 bytes per frame: root
+  translation (3 s16), 21 limb rotations (3 s16 binary angles, R = Rz Ry Rx like OoT3D), face u16.
+  ML64 banks are the vanilla file edited in place (same size, 0x265C30).
+- OoT3D keeps N64 frame counts (mostly) but Grezzo re-keyed most animations (hermite int16 keys,
+  edited poses), so N64 and OoT3D frames rarely match exactly.
+- Retargeting: N64 limb 0 = OoT3D bone 1 (root motion; bone 0 is a static model root). For each
+  OoT3D bone driven by an N64 limb, world_3d = world_n64 @ C with C a constant fitted robustly over
+  the ~360 animations both games share (two halves of the data agree within 0.1-2.4 deg; the hat
+  needs 27 deg, matching the -30 deg LIMB_TILT found by hand). Clavicles (13, 17), bow string
+  (22-24) and the model root keep OoT3D's motion. Root: x/z follow OoT3D's fitted mapping (OoT3D
+  scales sideways root sway to ~0.14), height uses the standing-frame ratio (~1.0).
+- `gen_anim_tables.py` (developer only, needs a ROM) writes `anim_tables.py`: animation list,
+  vanilla fingerprints (to find the animations a bank changes) and the fitted tables. No game data.
+- Converted csabs: linear int16 rotation keys per frame (rot16 anods), root translation as linear
+  float keys, other bones' anods copied raw; they go through the usual translation patch.
+- Not yet: the per-frame face index (OoT3D uses separate .faceb files).

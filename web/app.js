@@ -108,6 +108,14 @@ function renderMods() {
     const ids = new Set(summary.clips.map(c => c[0]));
     ul.append(li('ok', `Voice pack: ${summary.clips.length} clips for ${ids.size} sounds`));
   }
+  if (summary.anims) {
+    const a = summary.anims;
+    const row = li('ok', '');
+    row.innerHTML = a.changed.length
+      ? `<label><input type="checkbox" id="use-anims" checked> Use the pack's custom animations</label> <span class="muted">(${a.changed.length} changed: ${a.changed.join(', ')})</span>`
+      : `Animation bank found, but it doesn't change any animation`;
+    ul.append(row);
+  }
   for (const n of summary.notes) if (!/equipment source: .*\(model\)/.test(n)) ul.append(li('skip', n));
   if (!Object.keys(summary.models).length && !summary.clips.length)
     ul.append(li('missing', 'No OoT player model or voice clips found in these files.'));
@@ -246,6 +254,7 @@ $('convert').addEventListener('click', async () => {
       rate: RATE, layout: $('layout').value, region: $('region').value, equipment: equipmentChoice(),
       main: { ...mainChoice },
       childBiggoron: !!document.querySelector('.child-biggoron:checked'),
+      animations: !!document.querySelector('#use-anims:checked'),
       hideBack: Object.fromEntries([...document.querySelectorAll('fieldset.equip')].map(
         fs => [fs.dataset.age, [...fs.querySelectorAll('.hide-back input:checked')].map(i => i.value)])),
     },
