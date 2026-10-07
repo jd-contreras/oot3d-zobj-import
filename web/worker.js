@@ -44,13 +44,21 @@ onmessage = async ev => {
 files = {}
 for item in js_inputs:
     files.update(pack.expand(item.name, item.data.to_bytes()))
-models, clips, notes, paks = pack.plan(files)
+models, clips, notes, paks, cands = pack.plan(files)
 clip_list = [(sid, i, name, data) for sid in sorted(clips) for i, (name, data) in enumerate(clips[sid])]
 need = [build.target_zar(age) for age in models] + (['QueenSound.bcsar'] if clips else [])
-{'models': {age: p for age, (p, _) in models.items()}, 'need': need, 'notes': notes,
- 'equipment': {age: [[k, label, list(srcs), default] for k, label, srcs, default in opts]
-               for age, opts in pack.equipment_options(models, paks).items()},
- 'paks': pack.pak_names(paks),
+# equipment choices for every possible main model (the other models of that age lend equipment)
+equipment, names = {}, {}
+for age, paths in cands.items():
+    equipment[age] = {}
+    for main_path in paths:
+        m2, _, _, p2, _ = pack.plan(files, {age: main_path})
+        names.update(pack.pak_names(p2))
+        opts = pack.equipment_options({age: m2[age]}, p2)[age]
+        equipment[age][main_path] = [[k, label, list(srcs), default] for k, label, srcs, default in opts]
+{'models': {age: list(paths) for age, paths in cands.items()},
+ 'modelNames': {p: pack.model_name(p) for paths in cands.values() for p in paths},
+ 'need': need, 'notes': notes, 'equipment': equipment, 'paks': names,
  'clips': [('%04X' % sid, name) for sid, i, name, _ in clip_list]}
 `);
       const summary = res.toJs({ dict_converter: Object.fromEntries });
@@ -76,7 +84,8 @@ for (sid, i, name, data), p in zip(clip_list, pcm):
 out, report = pack.make_mod(files, game, opts['rate'], opts['layout'], opts['region'],
                             decode=lambda d: decoded[d], log=js_log,
                             equipment={age: None if v == 'all' else v for age, v in (opts.get('equipment') or {}).items()},
-                            hide_back={age: set(kinds) for age, kinds in (opts.get('hideBack') or {}).items()})
+                            hide_back={age: set(kinds) for age, kinds in (opts.get('hideBack') or {}).items()},
+                            main=opts.get('main') or {})
 from pyodide.ffi import to_js
 to_js([memoryview(pack.zip_bytes(out)), '\\n'.join(report)])
 `);

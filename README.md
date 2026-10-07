@@ -23,6 +23,10 @@ a model and pick, per item, whether it comes from the model, a pack, or OoT3D. A
 take from the model or a pack stays OoT3D's own, which is handy for models that still carry
 ModLoader64's default N64 items.
 
+**Equipment from another model:** add two or more models of the same age (for example two
+adult `.pak` files). Pick the main model, and the others can lend any of their items, just like
+ModLoader64 lets you mix models and equipment.
+
 **Hide shield on back / Hide sword on back:** two options (tick either or both) for long hair or
 a cape the items would clip into. They're left off the back but still show when held. Back items a
 model hides itself (ModLoader64's zero-scale back matrix) stay hidden; equipment-pack items show on
@@ -52,10 +56,12 @@ python tools/pack.py Adult_Model.pak Child_Model.pak Voice.pak --romfs path/to/E
 python tools/pack.py --list-equipment Adult_Model.pak
 python tools/pack.py Adult_Model.pak --romfs path/to/ExtractedRomFS -o mod.zip --equipment none
 python tools/pack.py Child_Model.pak Equipment.pak --romfs path/to/ExtractedRomFS -o mod.zip --equipment "kokiri_sword=MM3D Razor Sword"
+python tools/pack.py Model_A.pak Model_B.pak --main "Model A" --equipment "master_sword=Model B" --romfs path/to/ExtractedRomFS -o mod.zip
 ```
 
 Options: `--layout citra|luma|romfs`, `--region usa|eur|jpn`,
-`--equipment all|none|key,key...|key=source,...` (source: `model`, `oot3d` or an equipment pack's name),
+`--equipment all|none|key,key...|key=source,...` (source: `model`, `oot3d`, an equipment pack's name
+or another model's name), `--main NAME` (with several models of one age),
 `--hide-back shield`, `--hide-back sword` or `--hide-back shield,sword`.
 
 ## Credits

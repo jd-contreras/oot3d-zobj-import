@@ -207,3 +207,6 @@ python tools/pose.py <player.zobj> <link_v2.cmb> out/<name>   # writes .obj + .p
   the slots before it take only meshes that fit (smallest first, exact per-array budgets), the rest
   get one-triangle unreferenced placeholders, and the remaining meshes go after the pin
   (shp chunk offsets are 16-bit, so whole Link sepds can't be kept there).
+- Several models of one age: `pack.plan(files, main)` converts the main one and turns the others
+  into equipment sources shaped like packs (`pack.as_equipment`, category 'model', dls = their LUT).
+  They are offered for every item but never the default (packs first, then the main model).

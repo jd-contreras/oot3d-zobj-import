@@ -372,10 +372,16 @@ def equipment_sources(L, paks, age):
     return out
 
 
-def default_source(srcs):
-    """Equipment packs win over the model's own items; otherwise the model; otherwise OoT3D's."""
-    paks = [s_ for s_ in srcs if s_ != 'model']
-    return paks[0] if paks else 'model' if srcs else 'oot3d'
+def default_source(srcs, donors=()):
+    """Equipment packs win over the model's own items; otherwise the model; then another player model
+    (donors: ids of other models lending equipment); otherwise OoT3D's."""
+    paks = [s_ for s_ in srcs if s_ != 'model' and s_ not in donors]
+    if paks:
+        return paks[0]
+    if 'model' in srcs:
+        return 'model'
+    others = [s_ for s_ in srcs if s_ in donors]
+    return others[0] if others else 'oot3d'
 
 
 def equipment_options(zobj_src, paks=()):
@@ -384,7 +390,8 @@ def equipment_options(zobj_src, paks=()):
     use_profile(CHILD if zobj.is_child(m) else ADULT)
     age = 'child' if zobj.is_child(m) else 'adult'
     srcs = equipment_sources(zobj.lut(m), list(paks), age)
-    return [(k, v, srcs[k], default_source(srcs[k])) for k, v in EQUIPMENT_LABELS.items() if k in srcs]
+    donors = {pid for pid, info, _ in paks if info.get('category') == 'model'}
+    return [(k, v, srcs[k], default_source(srcs[k], donors)) for k, v in EQUIPMENT_LABELS.items() if k in srcs]
 
 
 def back_kind(key, comps):
@@ -401,7 +408,8 @@ def back_kind(key, comps):
 
 def convert(zobj_src, zar_src, equipment=None, paks=(), hide_back=()):
     """Convert one zobj. zobj_src / zar_src: paths or bytes (zar = Link's original archive of the same
-    age). paks: equipment packs [(id, equippak.parse() result, zobj bytes)].
+    age). paks: equipment sources [(id, equippak.parse() result, zobj bytes)]: equipment packs, or
+    other player models of the same age (category 'model'; pack.as_equipment).
     equipment: None (every item from a pack or the model, packs first), a list of keys (those items,
     the rest OoT3D's), or {key: 'model' | 'oot3d' | pack id}.
     hide_back: back items to leave off, {'shield', 'sword'} (still shown in hand), e.g. for long hair
@@ -414,12 +422,13 @@ def convert(zobj_src, zar_src, equipment=None, paks=(), hide_back=()):
     L = zobj.lut(m)
     paks = [pk for pk in paks if pk[1]['dls'].get(age)]
     srcs = equipment_sources(L, paks, age)
+    donors = {pid for pid, info, _ in paks if info.get('category') == 'model'}
     if equipment is None:
-        choice = {k: default_source(v) for k, v in srcs.items()}
+        choice = {k: default_source(v, donors) for k, v in srcs.items()}
     elif isinstance(equipment, dict):
-        choice = {k: equipment.get(k, default_source(v)) for k, v in srcs.items()}
+        choice = {k: equipment.get(k, default_source(v, donors)) for k, v in srcs.items()}
     else:
-        choice = {k: default_source(v) if k in equipment else 'oot3d' for k, v in srcs.items()}
+        choice = {k: default_source(v, donors) if k in equipment else 'oot3d' for k, v in srcs.items()}
     for k, src in list(choice.items()):
         if src != 'oot3d' and src not in srcs[k]:
             log(f'{EQUIPMENT_LABELS[k]}: {src} does not have it, using OoT3D\'s')

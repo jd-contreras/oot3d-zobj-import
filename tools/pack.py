@@ -14,7 +14,7 @@ import sys, os, io, zipfile, argparse
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(__file__))
-import build, voice, ml64pak, equippak
+import build, voice, ml64pak, equippak, zobj
 
 TITLE_IDS = {'usa': '0004000000033500', 'eur': '0004000000033600', 'jpn': '0004000000033400'}
 GAME_FILES = {  # file name -> path inside the romfs
@@ -39,10 +39,25 @@ def expand(name, data):
     return {name: data}
 
 
-def plan(files):
-    """What a file set contains: ({'adult'|'child': (path, zobj bytes)}, {sound id: clips}, notes,
-    equipment packs [(path, parsed, zobj bytes)])."""
-    models, notes, paks = {}, [], []
+def model_name(path):
+    """Display name of a player model: its .pak / .zip / .zobj file name."""
+    first = path.replace('\\', '/').split('/')[0]
+    return os.path.splitext(first)[0].replace('_', ' ')
+
+
+def as_equipment(path, data, age):
+    """A second player model used as an equipment source: its display lists, shaped like a pack."""
+    info = {'name': model_name(path) + ' (model)', 'category': 'model', 'unused': [],
+            'dls': {age: zobj.lut(zobj.read(data))}}
+    return path, info, data
+
+
+def plan(files, main=None):
+    """What a file set contains: ({'adult'|'child': (path, zobj bytes)} main models,
+    {sound id: clips}, notes, equipment sources [(path, parsed, zobj bytes)],
+    {age: [candidate model paths]}). Several models of one age: `main` = {age: path} picks the one
+    converted (default the first); the others become equipment sources, like equipment packs."""
+    cands, notes, paks = {}, [], []
     for path, data in sorted(files.items()):
         if not path.lower().endswith('.zobj'):
             continue
@@ -60,11 +75,18 @@ def plan(files):
         age = build.model_age(data)
         if age is None:
             notes.append(f'skipped {path} (not an OoT ML64 player zobj, e.g. an MM model)')
-        elif age in models:
-            notes.append(f'skipped {path} (already using {models[age][0]} for {age})')
         else:
-            models[age] = (path, data)
-    return models, voice.find_clips(files), notes, paks
+            cands.setdefault(age, []).append((path, data))
+    models = {}
+    for age, lst in cands.items():
+        want = (main or {}).get(age)
+        pick = next((c for c in lst if c[0] == want), lst[0])
+        models[age] = pick
+        for path, data in lst:
+            if path != pick[0]:
+                paks.append(as_equipment(path, data, age))
+                notes.append(f'{age} equipment source: {model_name(path)} (model)')
+    return models, voice.find_clips(files), notes, paks, {age: [p for p, _ in lst] for age, lst in cands.items()}
 
 
 def equipment_options(models, paks=()):
@@ -79,14 +101,15 @@ def pak_names(paks):
 
 
 def make_mod(files, game, rate=22050, layout='citra', region='usa', decode=None, log=print, equipment=None,
-             hide_back=None):
+             hide_back=None, main=None):
     """files: {path: bytes} (inputs, already expanded). game: {GAME_FILES name: bytes} (only those
     needed). decode(bytes) -> mono int16 PCM at `rate` (default ffmpeg); audio files may also be
     given already decoded as numpy arrays. equipment: {age: choice} with choice as in
     build.convert (None, [keys] or {key: source}); missing ages use the defaults.
     hide_back: {age: {'shield', 'sword'}} back items to leave off (still shown in hand).
+    main: {age: model path} when several models of an age are given (others lend equipment).
     Returns ({output path: bytes}, report lines)."""
-    models, clips, report, paks = plan(files)
+    models, clips, report, paks, _ = plan(files, main)
     if not models and not clips:
         raise ValueError('no OoT player zobj or voice clips found in the inputs')
     tid = TITLE_IDS[region]
@@ -135,6 +158,9 @@ def main():
     ap.add_argument('--rate', type=int, default=22050)
     ap.add_argument('--equipment', default='all', help='all, none, or comma-separated keys')
     ap.add_argument('--list-equipment', action='store_true', help='list the equipment keys and exit')
+    ap.add_argument('--main', action='append', default=[], metavar='NAME',
+                    help='with several models of one age: the one to convert (file or model name); '
+                         'the others lend their equipment')
     ap.add_argument('--hide-back', default='', metavar='shield,sword',
                     help='leave these off the back (still shown in hand), e.g. for long hair or a cape')
     a = ap.parse_args()
@@ -146,7 +172,16 @@ def main():
                 files.update(expand(os.path.basename(inp.rstrip('/\\')) + '/' + k, v))
         else:
             files.update(expand(os.path.basename(inp), open(inp, 'rb').read()))
-    models, clips, _, paks = plan(files)
+    _, _, _, _, cands = plan(files)
+    main = {}
+    for want in a.main:
+        for age, paths in cands.items():
+            for p in paths:
+                if want.lower() in (p.lower(), model_name(p).lower(), os.path.basename(p).lower()):
+                    main[age] = p
+    models, clips, _, paks, _ = plan(files, main)
+    for age in models:
+        print(f'{age} model: {model_name(models[age][0])} ({models[age][0]})')
     if a.list_equipment:
         names = pak_names(paks)
         for age, opts in equipment_options(models, paks).items():
@@ -161,12 +196,13 @@ def main():
     elif a.equipment == 'none':
         eq = []
     elif '=' in a.equipment:  # key=source pairs; a source may be a pack's file or display name
-        byname = {n: p for p, n in pak_names(paks).items()}
-        byname.update({os.path.basename(p): p for p, _, _ in paks})
+        byname = {n.lower(): p for p, n in pak_names(paks).items()}
+        byname.update({os.path.basename(p).lower(): p for p, _, _ in paks})
+        byname.update({model_name(p).lower(): p for p, info, _ in paks if info['category'] == 'model'})
         eq = {}
         for item in a.equipment.split(','):
             k, src = item.split('=', 1)
-            eq[k.strip()] = byname.get(src.strip(), src.strip())
+            eq[k.strip()] = byname.get(src.strip().lower(), src.strip())
     else:
         eq = a.equipment.split(',')
     equipment = {age: eq for age in models}
@@ -176,7 +212,8 @@ def main():
     game = {n: open(os.path.join(a.romfs, GAME_FILES[n]), 'rb').read() for n in need}
 
     out, report = make_mod(files, game, a.rate, a.layout, a.region, equipment=equipment,
-                           hide_back={age: {x for x in a.hide_back.split(',') if x} for age in models})
+                           hide_back={age: {x for x in a.hide_back.split(',') if x} for age in models},
+                           main=main)
     if a.out.lower().endswith('.zip'):
         open(a.out, 'wb').write(zip_bytes(out))
     else:

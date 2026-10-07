@@ -97,62 +97,89 @@ function renderMods() {
   const ul = $('mod-found');
   ul.replaceChildren();
   if (!summary) return;
-  for (const age of ['adult', 'child'])
-    if (summary.models[age]) ul.append(li('ok', `${age[0].toUpperCase() + age.slice(1)} model: ${summary.models[age]}`));
+  for (const age of ['adult', 'child']) {
+    const paths = summary.models[age] || [];
+    const cap = age[0].toUpperCase() + age.slice(1);
+    if (paths.length === 1) ul.append(li('ok', `${cap} model: ${summary.modelNames[paths[0]]}`));
+    else if (paths.length > 1)
+      ul.append(li('ok', `${cap} models: ${paths.map(p => summary.modelNames[p]).join(', ')} (pick the main one below; the others can lend equipment)`));
+  }
   if (summary.clips.length) {
     const ids = new Set(summary.clips.map(c => c[0]));
     ul.append(li('ok', `Voice pack: ${summary.clips.length} clips for ${ids.size} sounds`));
   }
-  for (const n of summary.notes) ul.append(li('skip', n));
+  for (const n of summary.notes) if (!/equipment source: .*\(model\)/.test(n)) ul.append(li('skip', n));
   if (!Object.keys(summary.models).length && !summary.clips.length)
     ul.append(li('missing', 'No OoT player model or voice clips found in these files.'));
   renderEquipment();
 }
 
-// Equipment picker: per model, use all / none / some of its N64 items; the rest stay OoT3D's.
+// Equipment picker, per age: the main model (when several were added), then where each item comes
+// from: the main model, an equipment pack, another model, or OoT3D's own.
+const mainChoice = {};
+
 function renderEquipment() {
   const box = $('equipment');
   box.replaceChildren();
   for (const age of ['adult', 'child']) {
-    const opts = summary && summary.equipment[age];
-    if (!opts) continue;
+    const paths = summary && summary.models[age];
+    if (!paths || !paths.length) continue;
+    if (!paths.includes(mainChoice[age])) mainChoice[age] = paths[0];
     const fs = document.createElement('fieldset');
     fs.className = 'equip';
     fs.dataset.age = age;
-    const hasPaks = opts.some(o => o[2].some(s => s !== 'model'));
-    fs.innerHTML = `<legend>${age === 'adult' ? 'Adult' : 'Child'} equipment</legend>
+    const cap = age === 'adult' ? 'Adult' : 'Child';
+    fs.innerHTML = `<legend>${cap} model and equipment</legend>
+      <label class="main-model" ${paths.length > 1 ? '' : 'hidden'}>Main ${age} model <select class="main"></select></label>
       <div class="modes">
-        <label><input type="radio" name="mode-${age}" value="all" checked> ${hasPaks ? 'Equipment packs, then the model' : 'All from the model'}</label>
+        <label><input type="radio" name="mode-${age}" value="all" checked> <span class="all-label"></span></label>
         <label><input type="radio" name="mode-${age}" value="none"> None (OoT3D's)</label>
         <label><input type="radio" name="mode-${age}" value="pick"> Choose per item</label>
       </div>
-      <p class="muted">Anything not taken from the model or an equipment pack uses OoT3D's own. Use "None" or choose per item for models that still carry ModLoader64's default N64 equipment.</p>
+      <p class="muted">Anything not taken from the model, an equipment pack or another model uses OoT3D's own. Use "None" or choose per item for models that still carry ModLoader64's default N64 equipment.</p>
       <div class="items" hidden></div>
       <div class="hide-back">
         <label><input type="checkbox" value="shield"> Hide shield on back</label>
         <label><input type="checkbox" value="sword"> Hide sword on back</label>
         <span class="muted">Still shown when held. For long hair or a cape they would clip into.</span>
       </div>`;
-    const items = fs.querySelector('.items');
-    for (const [key, label, srcs, def] of opts) {
-      const row = document.createElement('label');
-      row.className = 'item';
-      const sel = document.createElement('select');
-      sel.dataset.key = key;
-      for (const src of [...srcs, 'oot3d']) {
-        const o = document.createElement('option');
-        o.value = src;
-        o.textContent = src === 'model' ? 'The model' : src === 'oot3d' ? 'OoT3D' : summary.paks[src] || src;
-        o.selected = src === def;
-        sel.append(o);
-      }
-      row.append(label, sel);
-      items.append(row);
+    const sel = fs.querySelector('select.main');
+    for (const p of paths) {
+      const o = document.createElement('option');
+      o.value = p;
+      o.textContent = summary.modelNames[p];
+      o.selected = p === mainChoice[age];
+      sel.append(o);
     }
+    sel.addEventListener('change', () => { mainChoice[age] = sel.value; fillItems(fs, age); });
     fs.addEventListener('change', () => {
-      items.hidden = fs.querySelector('input[type=radio]:checked').value !== 'pick';
+      fs.querySelector('.items').hidden = fs.querySelector('input[type=radio]:checked').value !== 'pick';
     });
+    fillItems(fs, age);
     box.append(fs);
+  }
+}
+
+function fillItems(fs, age) {
+  const opts = summary.equipment[age][mainChoice[age]];
+  const items = fs.querySelector('.items');
+  items.replaceChildren();
+  const hasPaks = opts.some(o => o[2].some(s => s !== 'model' && !summary.models[age].includes(s)));
+  fs.querySelector('.all-label').textContent = hasPaks ? 'Equipment packs, then the model' : 'All from the model';
+  for (const [key, label, srcs, def] of opts) {
+    const row = document.createElement('label');
+    row.className = 'item';
+    const sel = document.createElement('select');
+    sel.dataset.key = key;
+    for (const src of [...srcs, 'oot3d']) {
+      const o = document.createElement('option');
+      o.value = src;
+      o.textContent = src === 'model' ? 'The model' : src === 'oot3d' ? 'OoT3D' : summary.paks[src] || src;
+      o.selected = src === def;
+      sel.append(o);
+    }
+    row.append(label, sel);
+    items.append(row);
   }
 }
 
@@ -215,6 +242,7 @@ $('convert').addEventListener('click', async () => {
     type: 'convert', game, clips,
     options: {
       rate: RATE, layout: $('layout').value, region: $('region').value, equipment: equipmentChoice(),
+      main: { ...mainChoice },
       hideBack: Object.fromEntries([...document.querySelectorAll('fieldset.equip')].map(
         fs => [fs.dataset.age, [...fs.querySelectorAll('.hide-back input:checked')].map(i => i.value)])),
     },
