@@ -137,7 +137,7 @@ def biggoron_source(models, paks, choice=None):
 
 
 def make_mod(files, game, rate=22050, layout='citra', region='usa', decode=None, log=print, equipment=None,
-             hide_back=None, main=None, child_biggoron=False, animations=True):
+             hide_back=None, main=None, child_biggoron=False, animations=True, oot3d_scabbard=None):
     """files: {path: bytes} (inputs, already expanded). game: {GAME_FILES name: bytes} (only those
     needed). decode(bytes) -> mono int16 PCM at `rate` (default ffmpeg); audio files may also be
     given already decoded as numpy arrays. equipment: {age: choice} with choice as in
@@ -145,6 +145,7 @@ def make_mod(files, game, rate=22050, layout='citra', region='usa', decode=None,
     hide_back: {age: {'shield', 'sword'}} back items to leave off (still shown in hand).
     main: {age: model path} when several models of an age are given (others lend equipment).
     animations: use an included ML64 animation bank's changed animations (link_animetion .zdata).
+    oot3d_scabbard: ages (adult) keeping OoT3D's Biggoron scabbard instead of the model's sheath.
     child_biggoron: the child model holds the adult Biggoron Sword (from the adult model or an
     adult equipment source) in place of the pedestal Master Sword, as ModLoader64's option does.
     Returns ({output path: bytes}, report lines)."""
@@ -173,7 +174,7 @@ def make_mod(files, game, rate=22050, layout='citra', region='usa', decode=None,
                 log('child Biggoron Sword: no adult model or adult Biggoron Sword in the inputs, skipped')
                 report.append('child Biggoron Sword skipped (needs an adult model or adult Biggoron Sword)')
         res = build.convert(data, game[need], (equipment or {}).get(age), paks, (hide_back or {}).get(age, ()), bgs,
-                            bank[1] if bank and bank[2] else None)
+                            bank[1] if bank and bank[2] else None, age in (oot3d_scabbard or ()))
         out[base + 'actor/' + res['name']] = res['zar']
         report.append(f'{age}: {path} -> romfs/actor/{res["name"]}')
     if clips:
@@ -210,6 +211,8 @@ def main():
     ap.add_argument('--main', action='append', default=[], metavar='NAME',
                     help='with several models of one age: the one to convert (file or model name); '
                          'the others lend their equipment')
+    ap.add_argument('--oot3d-biggoron-scabbard', action='store_true',
+                    help="keep OoT3D's Biggoron scabbard on the back (default: the model's sheath and Biggoron hilt)")
     ap.add_argument('--no-animations', action='store_true',
                     help="ignore an included animation bank (link_animetion .zdata)")
     ap.add_argument('--child-biggoron', action='store_true',
@@ -266,7 +269,8 @@ def main():
 
     out, report = make_mod(files, game, a.rate, a.layout, a.region, equipment=equipment,
                            hide_back={age: {x for x in a.hide_back.split(',') if x} for age in models},
-                           main=main, child_biggoron=a.child_biggoron, animations=not a.no_animations)
+                           main=main, child_biggoron=a.child_biggoron, animations=not a.no_animations,
+                           oot3d_scabbard={'adult'} if a.oot3d_biggoron_scabbard else ())
     if a.out.lower().endswith('.zip'):
         open(a.out, 'wb').write(zip_bytes(out))
     else:

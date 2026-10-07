@@ -238,3 +238,6 @@ python tools/pose.py <player.zobj> <link_v2.cmb> out/<name>   # writes .obj + .p
   measured on the game's curves: int16 rotation tangent = 2 x slope per frame, float translation
   tangent = slope / 40; header t0 = 0, t1 = duration - 1.
 - Not yet: the per-frame face index (OoT3D uses separate .faceb files).
+- Biggoron on the back (adult groups 7-12, Link's scabbard material 30 + Biggoron 7-12): by
+  default SWORD_SHEATH (+ LONGSWORD_HILT at the sword back matrix when sheathed: 8, 11, 12) from the
+  Master Sword / Biggoron sources; needs both items ported. `oot3d_scabbard` keeps Link's.

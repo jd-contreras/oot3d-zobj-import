@@ -57,13 +57,17 @@ MS_SHEATHED = ('master_sword', [('SWORD_SHEATH', 19), ('SWORD_HILT', 19, SWORD_B
 HYLIAN_BACK = ('hylian_shield', [('SHIELD_HYLIAN', 19, SHIELD_BACK)], {34})
 MIRROR_BACK = ('mirror_shield', [('SHIELD_MIRROR', 19, SHIELD_BACK)], {31, 32})
 BIGGORON = {7, 8, 9, 10, 11, 12}
+BG_EMPTY = ('biggoron_back', [('SWORD_SHEATH', 19)], {30})
+BG_SHEATHED = ('biggoron_back', [('SWORD_SHEATH', 19), ('LONGSWORD_HILT', 19, SWORD_BACK)], {30} | BIGGORON)
 ITEMS = {
     0: [MS_SHEATHED, HYLIAN_BACK], 1: [MS_SHEATH, HYLIAN_BACK],
     2: [MS_SHEATHED, MIRROR_BACK], 3: [MS_SHEATH, MIRROR_BACK],
     31: [MS_SHEATHED], 42: [MS_SHEATH],
-    # OoT3D's Biggoron scabbard on the back has no N64 equivalent: always Link's
-    7: [MIRROR_BACK, ('biggoron_back', [], {30})], 8: [MIRROR_BACK, ('biggoron_back', [], {30} | BIGGORON)],
-    10: [HYLIAN_BACK, ('biggoron_back', [], {30})], 11: [HYLIAN_BACK, ('biggoron_back', [], {30} | BIGGORON)],
+    # OoT3D's Biggoron scabbard (no N64 equivalent; 30 = scabbard). By default the model's Master
+    # Sword sheath stands in, with the Biggoron hilt in it when sheathed (option: keep OoT3D's).
+    7: [MIRROR_BACK, BG_EMPTY], 8: [MIRROR_BACK, BG_SHEATHED],
+    10: [HYLIAN_BACK, BG_EMPTY], 11: [HYLIAN_BACK, BG_SHEATHED],
+    9: [BG_EMPTY], 12: [BG_SHEATHED],
     16: [(None, [('LFIST', 15)], {22}), ('master_sword', [('SWORD_HILT', 15), ('SWORD_BLADE', 15)], {27, 28, 29})],
     37: [(None, [('LFIST', 15)], {22}), ('biggoron', [('LONGSWORD_HILT', 15), ('LONGSWORD_BLADE', 15)], BIGGORON)],
     38: [(None, [('LFIST', 15)], {22}), ('biggoron', [('LONGSWORD_HILT', 15), ('LONGSWORD_BROKEN', 15)], BIGGORON)],
@@ -418,7 +422,8 @@ CHILD_BIGGORON_GROUP = 16
 BIGGORON_PARTS = ('LONGSWORD_HILT', 'LONGSWORD_BLADE')
 
 
-def convert(zobj_src, zar_src, equipment=None, paks=(), hide_back=(), child_biggoron=None, anims=None):
+def convert(zobj_src, zar_src, equipment=None, paks=(), hide_back=(), child_biggoron=None, anims=None,
+            oot3d_scabbard=False):
     """Convert one zobj. zobj_src / zar_src: paths or bytes (zar = Link's original archive of the same
     age). paks: equipment sources [(id, equippak.parse() result, zobj bytes)]: equipment packs, or
     other player models of the same age (category 'model'; pack.as_equipment).
@@ -427,6 +432,8 @@ def convert(zobj_src, zar_src, equipment=None, paks=(), hide_back=(), child_bigg
     hide_back: back items to leave off, {'shield', 'sword'} (still shown in hand), e.g. for long hair
     or a cape they would clip into.
     anims: an ML64 animation bank (link_animetion .zdata): its changed animations replace OoT3D's.
+    oot3d_scabbard: keep OoT3D's Biggoron scabbard on the back (default: the Master Sword sheath
+    from the model, with the Biggoron hilt in it when sheathed).
     child_biggoron: (adult zobj or pack bytes, {LONGSWORD_HILT / LONGSWORD_BLADE: address}, name) for a
     child model: the adult Biggoron Sword replaces the pedestal Master Sword (CHILD_BIGGORON_GROUP).
     Returns {'name': romfs/actor file name, 'zar': bytes, 'cmb': bytes}."""
@@ -449,6 +456,9 @@ def convert(zobj_src, zar_src, equipment=None, paks=(), hide_back=(), child_bigg
             log(f'{EQUIPMENT_LABELS[k]}: {src} does not have it, using OoT3D\'s')
             choice[k] = 'oot3d'
     ported = {k for k, src in choice.items() if src != 'oot3d'}
+    # the Biggoron on the back is built from the Master Sword sheath and the Biggoron hilt
+    if not oot3d_scabbard and {'master_sword', 'biggoron'} <= ported:
+        ported.add('biggoron_back')
     # display lists taken from equipment packs instead of the model
     pak_models = {pid: zobj.Model(data, m.limbs, mtx_limb=m.mtx_limb) for pid, _, data in paks}
     pak_dls = {pid: info['dls'][age] for pid, info, _ in paks}

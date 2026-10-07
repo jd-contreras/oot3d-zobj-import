@@ -28,6 +28,10 @@ ModLoader64's default N64 items.
 adult `.pak` files). Pick the main model, and the others can lend any of their items, just like
 ModLoader64 lets you mix models and equipment.
 
+**Biggoron Sword on the back:** player models have no Biggoron Sword for the back, so by default
+the model's Master Sword sheath is used, with the Biggoron hilt in it when sheathed. Tick **Use
+OoT3D Biggoron scabbard** to keep OoT3D's big scabbard instead.
+
 **Import child Biggoron Sword:** like ModLoader64's option, the adult model's Biggoron Sword (held
 right side up) replaces child Link's pedestal Master Sword, which the game also draws for a child
 holding the Biggoron Sword.
@@ -70,7 +74,7 @@ python tools/pack.py Model_A.pak Model_B.pak --main "Model A" --equipment "maste
 
 Options: `--layout citra|luma|romfs`, `--region usa|eur|jpn`,
 `--equipment all|none|key,key...|key=source,...` (source: `model`, `oot3d`, an equipment pack's name
-or another model's name), `--main NAME` (with several models of one age), `--child-biggoron`, `--no-animations`,
+or another model's name), `--main NAME` (with several models of one age), `--child-biggoron`, `--oot3d-biggoron-scabbard`, `--no-animations`,
 `--hide-back shield`, `--hide-back sword` or `--hide-back shield,sword`.
 
 ## Credits
