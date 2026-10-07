@@ -805,12 +805,12 @@ def convert(zobj_src, zar_src, equipment=None, paks=(), hide_back=(), child_bigg
         """Link's own mesh stays: groups we don't touch, and the parts of items not ported."""
         if gid in GROUPS:
             return False
-        for key, comps, mats in ITEMS.get(gid, ()):
+        for key, comps, mats in items.get(gid, ()):  # this build's table (options adjust it)
             if mat in mats:
                 if back_kind(key, comps) in hide_back:
                     return False
                 return key is not None and key not in ported
-        return gid not in ITEMS
+        return gid not in items
 
     keep = [i for i, (s, mat, gid) in enumerate(t.meshes) if keep_link(mat, gid)]
 
