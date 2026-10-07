@@ -49,7 +49,8 @@ def rts_mtx(rz, tx, ty, tz):
     return M
 
 
-# Z64Online's back matrices (UniversalAliasTable), used when a zobj's own are empty
+# Z64Online's back matrices (UniversalAliasTable). A model can hide its back items with a zero-scale
+# matrix; equipment-pack items still show on the back, placed with these defaults.
 BACK_MTX_DEFAULT = {SWORD_BACK: rts_mtx(0, -715, -310, 78), SHIELD_BACK: rts_mtx(180, 935, 94, 29)}
 MS_SHEATH = ('master_sword', [('SWORD_SHEATH', 19)], {6})
 MS_SHEATHED = ('master_sword', [('SWORD_SHEATH', 19), ('SWORD_HILT', 19, SWORD_BACK)], {6, 27, 28})
@@ -386,11 +387,17 @@ def equipment_options(zobj_src, paks=()):
     return [(k, v, srcs[k], default_source(srcs[k])) for k, v in EQUIPMENT_LABELS.items() if k in srcs]
 
 
-def convert(zobj_src, zar_src, equipment=None, paks=()):
+def is_back_shield(comps):
+    """Equipment-list parts that put a shield on the back (drawn on the sheath limb, 19)."""
+    return bool(comps) and all(c[0].startswith('SHIELD') and c[1] == 19 for c in comps)
+
+
+def convert(zobj_src, zar_src, equipment=None, paks=(), hide_back_shield=False):
     """Convert one zobj. zobj_src / zar_src: paths or bytes (zar = Link's original archive of the same
     age). paks: equipment packs [(id, equippak.parse() result, zobj bytes)].
     equipment: None (every item from a pack or the model, packs first), a list of keys (those items,
     the rest OoT3D's), or {key: 'model' | 'oot3d' | pack id}.
+    hide_back_shield: no shield on the back (still shown in hand), e.g. for long hair or a cape.
     Returns {'name': romfs/actor file name, 'zar': bytes, 'cmb': bytes}."""
     m = zobj.read(zobj_src)
     use_profile(CHILD if zobj.is_child(m) else ADULT)
@@ -434,11 +441,7 @@ def convert(zobj_src, zar_src, equipment=None, paks=()):
     def n64_mtx(addr):
         hi = struct.unpack_from('>16h', m.data, addr)
         lo = struct.unpack_from('>16H', m.data, addr + 32)
-        M = np.array([hi[i] + lo[i] / 65536 for i in range(16)]).reshape(4, 4)
-        if abs(np.linalg.det(M[:3, :3])) < 1e-6 and addr in BACK_MTX_DEFAULT:
-            # some zobjs ship an empty rotation here; Z64Online writes its defaults at load
-            M = BACK_MTX_DEFAULT[addr]
-        return M
+        return np.array([hi[i] + lo[i] / 65536 for i in range(16)]).reshape(4, 4)
 
     def dl(name, limb, mtx=None):
         src_model, addr = override.get(name, (m, m.limbs[limb].dl if name == 'limb' else L.get(name)))
@@ -461,6 +464,10 @@ def convert(zobj_src, zar_src, equipment=None, paks=()):
         if mtx is None:
             return tris
         M = n64_mtx(mtx)  # row-vector convention: v' = v @ M (only for vertices in `limb` space)
+        if abs(np.linalg.det(M[:3, :3])) < 1e-6:  # zero-scale back matrix: the model hides this item
+            if src_model is m or mtx not in BACK_MTX_DEFAULT:
+                return []
+            M = BACK_MTX_DEFAULT[mtx]  # an equipment pack's item still shows on the back
         out = []
         for tr in tris:
             vs = []
@@ -476,7 +483,8 @@ def convert(zobj_src, zar_src, equipment=None, paks=()):
 
     group_tris = {g: [tr for src in srcs for tr in dl(*src)] for g, srcs in GROUPS.items()}
     for g, ents in ITEMS.items():
-        group_tris[g] = [tr for key, comps, _ in ents if key is None or key in ported
+        group_tris[g] = [tr for key, comps, _ in ents
+                         if (key is None or key in ported) and not (hide_back_shield and is_back_shield(comps))
                          for src in comps for tr in dl(*src)]
 
     # ---- bow: OoT3D draws the string itself (groups 43/44 on bones 23/24) at Link's bow tips, so
@@ -709,8 +717,10 @@ def convert(zobj_src, zar_src, equipment=None, paks=()):
         """Link's own mesh stays: groups we don't touch, and the parts of items not ported."""
         if gid in GROUPS:
             return False
-        for key, _, mats in ITEMS.get(gid, ()):
+        for key, comps, mats in ITEMS.get(gid, ()):
             if mat in mats:
+                if hide_back_shield and is_back_shield(comps):
+                    return False
                 return key is not None and key not in ported
         return gid not in ITEMS
 

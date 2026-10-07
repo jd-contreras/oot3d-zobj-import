@@ -127,7 +127,8 @@ function renderEquipment() {
         <label><input type="radio" name="mode-${age}" value="pick"> Choose per item</label>
       </div>
       <p class="muted">Anything not taken from the model or an equipment pack uses OoT3D's own. Use "None" or choose per item for models that still carry ModLoader64's default N64 equipment.</p>
-      <div class="items" hidden></div>`;
+      <div class="items" hidden></div>
+      <label class="hide-shield"><input type="checkbox" class="hide-back-shield"> Hide shield on back <span class="muted">(still shown when held; for long hair or a cape it would clip into)</span></label>`;
     const items = fs.querySelector('.items');
     for (const [key, label, srcs, def] of opts) {
       const row = document.createElement('label');
@@ -208,7 +209,11 @@ $('convert').addEventListener('click', async () => {
   const game = await Promise.all(summary.need.map(async n => [n, new Uint8Array(await gameFiles.get(n).arrayBuffer())]));
   worker.postMessage({
     type: 'convert', game, clips,
-    options: { rate: RATE, layout: $('layout').value, region: $('region').value, equipment: equipmentChoice() },
+    options: {
+      rate: RATE, layout: $('layout').value, region: $('region').value, equipment: equipmentChoice(),
+      hideBackShield: Object.fromEntries([...document.querySelectorAll('fieldset.equip')].map(
+        fs => [fs.dataset.age, fs.querySelector('.hide-back-shield').checked])),
+    },
   });
 });
 

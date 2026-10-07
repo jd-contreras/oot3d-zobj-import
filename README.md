@@ -23,6 +23,10 @@ a model and pick, per item, whether it comes from the model, a pack, or OoT3D. A
 take from the model or a pack stays OoT3D's own, which is handy for models that still carry
 ModLoader64's default N64 items.
 
+**Hide shield on back:** for long hair or a cape the shield would clip into. The shield is left off
+the back but still shows when held. Back items a model hides itself (ModLoader64's zero-scale
+back matrix) stay hidden; equipment-pack items show on the back unless you tick this.
+
 **Mileage may vary:** every model is built a little differently. Held items may sit slightly
 differently than on the N64, and the first-person slingshot can show a small stray sliver.
 
@@ -50,7 +54,8 @@ python tools/pack.py Child_Model.pak Equipment.pak --romfs path/to/ExtractedRomF
 ```
 
 Options: `--layout citra|luma|romfs`, `--region usa|eur|jpn`,
-`--equipment all|none|key,key...|key=source,...` (source: `model`, `oot3d` or an equipment pack's name).
+`--equipment all|none|key,key...|key=source,...` (source: `model`, `oot3d` or an equipment pack's name),
+`--hide-back-shield`.
 
 ## Credits
 

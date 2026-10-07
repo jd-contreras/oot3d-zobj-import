@@ -198,8 +198,10 @@ python tools/pose.py <player.zobj> <link_v2.cmb> out/<name>   # writes .obj + .p
   Slots (sword0/1/2 = Kokiri / Master / Biggoron, shield0/1/2 = Deku / Hylian / Mirror, ocarina_0/1,
   bow, hookshot, ...) map onto the player LUT names. Pack triangles carry their own file (tri.src)
   for texture decoding.
-- Back matrices: some zobjs (adult Saria) ship 0x5010 / 0x5050 with an empty rotation; Z64Online
-  rewrites them at load, so degenerate ones are replaced by its defaults (`BACK_MTX_DEFAULT`).
+- Back matrices: a zero-scale matrix at 0x5010 / 0x5050 is how a model hides its back items (adult
+  Saria hides hilt and shield so they don't clip her cape); those parts are left out. Equipment-pack
+  items still show on the back, placed with Z64Online's default matrices (`BACK_MTX_DEFAULT`).
+  `hide_back_shield` drops every back shield (model, pack or Link's), held shields unaffected.
 - Pinned string sepds with large equipment: if new meshes overflow the space before a pinned sepd,
   the slots before it take only meshes that fit (smallest first, exact per-array budgets), the rest
   get one-triangle unreferenced placeholders, and the remaining meshes go after the pin
