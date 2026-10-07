@@ -189,3 +189,18 @@ Copy `zelda_link_boy_new.zar` to `luma/titles/0004000000033500/romfs/actor/` (US
 python tools/zar.py <archive.zar> -x <outdir>
 python tools/pose.py <player.zobj> <link_v2.cmb> out/<name>   # writes .obj + .png preview
 ```
+
+- Equipment selection: `build.ITEMS` maps each equipment group to parts tagged with an equipment key
+  (None = the model's hand) and Link's materials for that part; an item not taken keeps Link's
+  meshes of those materials. Sources per item: the model, an equipment pack, or OoT3D.
+- Equipment packs (`tools/equippak.py`): 'MODLOADER64' + type 0x69 + u32 count + DL table, then
+  'EQUIPMANIFEST' JSON {"OOT": {"adult"|"child": {index: slot}}}, 'EQUIPMENTNAME', 'EQUIPMENTCAT'.
+  Slots (sword0/1/2 = Kokiri / Master / Biggoron, shield0/1/2 = Deku / Hylian / Mirror, ocarina_0/1,
+  bow, hookshot, ...) map onto the player LUT names. Pack triangles carry their own file (tri.src)
+  for texture decoding.
+- Back matrices: some zobjs (adult Saria) ship 0x5010 / 0x5050 with an empty rotation; Z64Online
+  rewrites them at load, so degenerate ones are replaced by its defaults (`BACK_MTX_DEFAULT`).
+- Pinned string sepds with large equipment: if new meshes overflow the space before a pinned sepd,
+  the slots before it take only meshes that fit (smallest first, exact per-array budgets), the rest
+  get one-triangle unreferenced placeholders, and the remaining meshes go after the pin
+  (shp chunk offsets are 16-bit, so whole Link sepds can't be kept there).

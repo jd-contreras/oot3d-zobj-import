@@ -38,6 +38,19 @@ GROUPS = {
 # selected, or missing from the model) keeps Link's own meshes of those materials.
 # ML64 back matrices: 0x5010 sheathed hilt, 0x5050 shield on the back.
 SWORD_BACK, SHIELD_BACK = 0x5010, 0x5050
+
+
+def rts_mtx(rz, tx, ty, tz):
+    """N64 row-vector matrix: rotation about Z (degrees), then translation (guRTSF with rx = ry = 0)."""
+    c, s_ = np.cos(np.radians(rz)), np.sin(np.radians(rz))
+    M = np.eye(4)
+    M[:2, :2] = [[c, s_], [-s_, c]]
+    M[3, :3] = (tx, ty, tz)
+    return M
+
+
+# Z64Online's back matrices (UniversalAliasTable), used when a zobj's own are empty
+BACK_MTX_DEFAULT = {SWORD_BACK: rts_mtx(0, -715, -310, 78), SHIELD_BACK: rts_mtx(180, 935, 94, 29)}
 MS_SHEATH = ('master_sword', [('SWORD_SHEATH', 19)], {6})
 MS_SHEATHED = ('master_sword', [('SWORD_SHEATH', 19), ('SWORD_HILT', 19, SWORD_BACK)], {6, 27, 28})
 HYLIAN_BACK = ('hylian_shield', [('SHIELD_HYLIAN', 19, SHIELD_BACK)], {34})
@@ -173,6 +186,7 @@ CHILD = dict(
         'slingshot': 'Slingshot', 'ocarina': 'Ocarinas', 'bottle': 'Bottle', 'goron_bracelet': 'Goron Bracelet',
     },
     BOW_GROUPS={}, PINNED_GROUPS={22, 23},  # slingshot string, Deku stick
+    BACK_MTX_DEFAULT={0x5010: rts_mtx(0, -440, -211, 0), 0x5050: rts_mtx(180, 545, 0, 80)},
     SEATED={17: ('ocarina', 'OCARINA_FAIRY', 10, 'RHAND'), 18: ('ocarina', 'OCARINA_TIME', 22, 'RHAND'),
             19: ('slingshot', 'SLINGSHOT', 23, 'RFIST'), 20: ('slingshot', 'SLINGSHOT', 23, 'FPS_RIGHT_ARM')},
     TEMPLATE_OPAQUE=2, TEMPLATE_CUTOUT=13,
@@ -236,8 +250,19 @@ def rando_tunic_combiners(t, materials):
     return combiners
 
 
+def with_verts(tri, vs):
+    """Copy of a triangle with new vertices, keeping tags set on it (bottle, gauntlet, src)."""
+    out = dataclasses.replace(tri, v=vs)
+    for k, v in vars(tri).items():
+        if k not in vars(out):
+            setattr(out, k, v)
+    return out
+
+
 def decode_tri(m, tri, env=None, base=None):
-    """Texture of an N64 triangle with its colour combiner baked in (primitive / env colours)."""
+    """Texture of an N64 triangle with its colour combiner baked in (primitive / env colours).
+    Triangles from an equipment pack carry their own file in tri.src."""
+    m = getattr(tri, 'src', m)
     px = decode(m, tri.tex, base=base)
     a = np.array(px, float) / 255
     rgb = zobj.combine_rgb(tri, a[:, :3], env=env)
@@ -322,39 +347,83 @@ def target_zar(age):
     return (CHILD if age == 'child' else ADULT)['ZAR_NAME']
 
 
-def available_equipment(m, lut=None):
-    """Equipment keys this model has every display list for (others fall back to OoT3D's)."""
-    L = lut or zobj.lut(m)
+def item_parts():
+    """{equipment key: set of zobj display-list names it is built from}."""
     need = {}
     for ents in ITEMS.values():
         for key, comps, _ in ents:
             if key in EQUIPMENT_LABELS:
                 need.setdefault(key, set()).update(c[0] for c in comps)
-    return [k for k in EQUIPMENT_LABELS if k in need and need[k] <= set(L)]
+    return need
 
 
-def equipment_options(zobj_src):
-    """[(key, label, available in this model)] for the zobj's age, in display order."""
+def equipment_sources(L, paks, age):
+    """{key: [source ids]}: 'model' when the model has every part, a pak's id when the pak supplies
+    at least one part and the model / pak together cover the rest. paks: [(id, parsed pak, bytes)]."""
+    out = {}
+    for key, parts in item_parts().items():
+        srcs = ['model'] if parts <= set(L) else []
+        for pid, info, _ in paks:
+            have = set(info['dls'].get(age, {}))
+            if parts & have and parts <= have | set(L):
+                srcs.append(pid)
+        out[key] = srcs
+    return out
+
+
+def default_source(srcs):
+    """Equipment packs win over the model's own items; otherwise the model; otherwise OoT3D's."""
+    paks = [s_ for s_ in srcs if s_ != 'model']
+    return paks[0] if paks else 'model' if srcs else 'oot3d'
+
+
+def equipment_options(zobj_src, paks=()):
+    """[(key, label, [source ids], default source)] for the zobj's age, in display order."""
     m = zobj.read(zobj_src)
     use_profile(CHILD if zobj.is_child(m) else ADULT)
-    have = set(available_equipment(m))
-    return [(k, v, k in have) for k, v in EQUIPMENT_LABELS.items()]
+    age = 'child' if zobj.is_child(m) else 'adult'
+    srcs = equipment_sources(zobj.lut(m), list(paks), age)
+    return [(k, v, srcs[k], default_source(srcs[k])) for k, v in EQUIPMENT_LABELS.items() if k in srcs]
 
 
-def convert(zobj_src, zar_src, equipment=None):
+def convert(zobj_src, zar_src, equipment=None, paks=()):
     """Convert one zobj. zobj_src / zar_src: paths or bytes (zar = Link's original archive of the same
-    age). equipment: keys of EQUIPMENT_LABELS to take from the model (None = all it has); the rest
-    stays OoT3D's. Returns {'name': romfs/actor file name, 'zar': bytes, 'cmb': bytes}."""
+    age). paks: equipment packs [(id, equippak.parse() result, zobj bytes)].
+    equipment: None (every item from a pack or the model, packs first), a list of keys (those items,
+    the rest OoT3D's), or {key: 'model' | 'oot3d' | pack id}.
+    Returns {'name': romfs/actor file name, 'zar': bytes, 'cmb': bytes}."""
     m = zobj.read(zobj_src)
     use_profile(CHILD if zobj.is_child(m) else ADULT)
-    log('%s model -> %s' % ('child' if zobj.is_child(m) else 'adult', ZAR_NAME))
+    age = 'child' if zobj.is_child(m) else 'adult'
+    log('%s model -> %s' % (age, ZAR_NAME))
     L = zobj.lut(m)
-    have = available_equipment(m, L)
-    ported = set(have) if equipment is None else set(equipment) & set(have)
-    missing = [k for k in (equipment or []) if k in EQUIPMENT_LABELS and k not in have]
-    if missing:
-        log('not in this model, using OoT3D\'s: ' + ', '.join(EQUIPMENT_LABELS[k] for k in missing))
-    log('equipment from the model: ' + (', '.join(EQUIPMENT_LABELS[k] for k in EQUIPMENT_LABELS if k in ported) or 'none'))
+    paks = [pk for pk in paks if pk[1]['dls'].get(age)]
+    srcs = equipment_sources(L, paks, age)
+    if equipment is None:
+        choice = {k: default_source(v) for k, v in srcs.items()}
+    elif isinstance(equipment, dict):
+        choice = {k: equipment.get(k, default_source(v)) for k, v in srcs.items()}
+    else:
+        choice = {k: default_source(v) if k in equipment else 'oot3d' for k, v in srcs.items()}
+    for k, src in list(choice.items()):
+        if src != 'oot3d' and src not in srcs[k]:
+            log(f'{EQUIPMENT_LABELS[k]}: {src} does not have it, using OoT3D\'s')
+            choice[k] = 'oot3d'
+    ported = {k for k, src in choice.items() if src != 'oot3d'}
+    # display lists taken from equipment packs instead of the model
+    pak_models = {pid: zobj.Model(data, m.limbs, mtx_limb=m.mtx_limb) for pid, _, data in paks}
+    pak_dls = {pid: info['dls'][age] for pid, info, _ in paks}
+    override = {}
+    for k, src in choice.items():
+        if src not in ('model', 'oot3d'):
+            for part in item_parts()[k]:
+                if part in pak_dls[src]:
+                    override[part] = (pak_models[src], pak_dls[src][part])
+    names = {pid: info['name'] or pid for pid, info, _ in paks}
+    for k in EQUIPMENT_LABELS:
+        if k in choice:
+            src = choice[k]
+            log(f'  {EQUIPMENT_LABELS[k]}: ' + {'model': 'model', 'oot3d': 'OoT3D'}.get(src, names.get(src, src)))
     zar_bytes = zar_src if isinstance(zar_src, (bytes, bytearray)) else open(zar_src, 'rb').read()
     _, files = zar.read_zar(zar_bytes)
     files = dict(files)
@@ -365,10 +434,20 @@ def convert(zobj_src, zar_src, equipment=None):
     def n64_mtx(addr):
         hi = struct.unpack_from('>16h', m.data, addr)
         lo = struct.unpack_from('>16H', m.data, addr + 32)
-        return np.array([hi[i] + lo[i] / 65536 for i in range(16)]).reshape(4, 4)
+        M = np.array([hi[i] + lo[i] / 65536 for i in range(16)]).reshape(4, 4)
+        if abs(np.linalg.det(M[:3, :3])) < 1e-6 and addr in BACK_MTX_DEFAULT:
+            # some zobjs ship an empty rotation here; Z64Online writes its defaults at load
+            M = BACK_MTX_DEFAULT[addr]
+        return M
 
     def dl(name, limb, mtx=None):
-        tris = zobj.dl_tris(m, m.limbs[limb].dl if name == 'limb' else L[name], limb)
+        src_model, addr = override.get(name, (m, m.limbs[limb].dl if name == 'limb' else L.get(name)))
+        if addr is None:
+            return []
+        tris = zobj.dl_tris(src_model, addr, limb)
+        if src_model is not m:  # an equipment pack: its textures live in its own file
+            for tr in tris:
+                tr.src = src_model
         if name.startswith('FPS_'):
             tris = [tr for tr in tris
                     if not all(v[0] == limb and np.linalg.norm(v[1]) > FAR_FRAGMENT for v in tr.v)]
@@ -392,7 +471,7 @@ def convert(zobj_src, zar_src, equipment=None):
                         n = np.array([c - 256 if c > 127 else c for c in col[:3]], float) @ M[:3, :3]
                         col = tuple(int(c) & 255 for c in np.round(n)) + (col[3],)
                 vs.append((vl, pos, st, col))
-            out.append(dataclasses.replace(tr, v=vs))
+            out.append(with_verts(tr, vs))
         return out
 
     group_tris = {g: [tr for src in srcs for tr in dl(*src)] for g, srcs in GROUPS.items()}
@@ -451,7 +530,7 @@ def convert(zobj_src, zar_src, equipment=None):
                         n = rot @ np.array([c - 256 if c > 127 else c for c in col[:3]], float)
                         col = tuple(int(round(c)) & 255 for c in n) + (col[3],)
                 vs.append((vl, pos, st, col))
-            out.append(dataclasses.replace(tr, v=vs))
+            out.append(with_verts(tr, vs))
         return out
 
     # Bow: OoT3D draws the string itself and pins it to Link's 3D bow tips, so the zobj bow is fitted
@@ -572,7 +651,8 @@ def convert(zobj_src, zar_src, equipment=None):
             key = ('prim',) + combiner
         else:
             x = tri.tex
-            key = (x.seg, x.addr, x.fmt, x.siz, x.w, x.h, x.tlut, x.cms, x.cmt, tri.alpha_from_texture, tri.tunic) + combiner
+            key = (id(getattr(tri, 'src', m)), x.seg, x.addr, x.fmt, x.siz, x.w, x.h, x.tlut, x.cms, x.cmt,
+                   tri.alpha_from_texture, tri.tunic) + combiner
         if key in mat_for:
             return mat_for[key]
         if tri.tex is None:

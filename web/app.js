@@ -119,20 +119,30 @@ function renderEquipment() {
     const fs = document.createElement('fieldset');
     fs.className = 'equip';
     fs.dataset.age = age;
-    fs.innerHTML = `<legend>${age === 'adult' ? 'Adult' : 'Child'} model equipment</legend>
+    const hasPaks = opts.some(o => o[2].some(s => s !== 'model'));
+    fs.innerHTML = `<legend>${age === 'adult' ? 'Adult' : 'Child'} equipment</legend>
       <div class="modes">
-        <label><input type="radio" name="mode-${age}" value="all" checked> All from the model</label>
+        <label><input type="radio" name="mode-${age}" value="all" checked> ${hasPaks ? 'Equipment packs, then the model' : 'All from the model'}</label>
         <label><input type="radio" name="mode-${age}" value="none"> None (OoT3D's)</label>
-        <label><input type="radio" name="mode-${age}" value="pick"> Choose</label>
+        <label><input type="radio" name="mode-${age}" value="pick"> Choose per item</label>
       </div>
-      <p class="muted">Items not taken from the model use OoT3D's own. Pick "None" or untick items for models that still carry ModLoader64's default N64 equipment.</p>
+      <p class="muted">Anything not taken from the model or an equipment pack uses OoT3D's own. Use "None" or choose per item for models that still carry ModLoader64's default N64 equipment.</p>
       <div class="items" hidden></div>`;
     const items = fs.querySelector('.items');
-    for (const [key, label, have] of opts) {
-      const l = document.createElement('label');
-      l.innerHTML = `<input type="checkbox" value="${key}" ${have ? 'checked' : 'disabled'}> ${label}` +
-        (have ? '' : ' <span class="muted">(not in this model)</span>');
-      items.append(l);
+    for (const [key, label, srcs, def] of opts) {
+      const row = document.createElement('label');
+      row.className = 'item';
+      const sel = document.createElement('select');
+      sel.dataset.key = key;
+      for (const src of [...srcs, 'oot3d']) {
+        const o = document.createElement('option');
+        o.value = src;
+        o.textContent = src === 'model' ? 'The model' : src === 'oot3d' ? 'OoT3D' : summary.paks[src] || src;
+        o.selected = src === def;
+        sel.append(o);
+      }
+      row.append(label, sel);
+      items.append(row);
     }
     fs.addEventListener('change', () => {
       items.hidden = fs.querySelector('input[type=radio]:checked').value !== 'pick';
@@ -145,8 +155,8 @@ function equipmentChoice() {
   const out = {};
   for (const fs of document.querySelectorAll('fieldset.equip')) {
     const mode = fs.querySelector('input[type=radio]:checked').value;
-    out[fs.dataset.age] = mode === 'all' ? null : mode === 'none' ? [] :
-      [...fs.querySelectorAll('.items input:checked')].map(i => i.value);
+    out[fs.dataset.age] = mode === 'all' ? 'all' : mode === 'none' ? [] :
+      Object.fromEntries([...fs.querySelectorAll('.items select')].map(s => [s.dataset.key, s.value]));
   }
   return out;
 }

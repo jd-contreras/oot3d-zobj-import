@@ -14,19 +14,21 @@ no game files are included: you supply them from your own copy of OoT3D.
 |---|---|---|
 | Body, face (blinking, talking) | yes | yes |
 | Tunic colours | Kokiri / Goron / Zora | Kokiri green (the game has no child tunic swap) |
-| Equipment (swords, shields, bow / slingshot, hookshot, ocarina, bottle, gauntlets, boots, ...) | yes, all / none / pick | yes, all / none / pick |
+| Equipment (swords, shields, bow / slingshot, hookshot, ocarina, bottle, gauntlets, boots, ...) | from the model, equipment packs or OoT3D, per item | same |
 | First-person arms | yes | yes |
 | Voice packs (ML64 `sounds/<id>/` clips) | yes | yes |
 
-Equipment you don't take from the model stays OoT3D's own. That's handy for models that still
-carry ModLoader64's default N64 items.
+**Equipment packs** (ModLoader64 / Z64Online equipment `.pak` files) work too: add them next to
+a model and pick, per item, whether it comes from the model, a pack, or OoT3D. Anything you don't
+take from the model or a pack stays OoT3D's own, which is handy for models that still carry
+ModLoader64's default N64 items.
 
 **Mileage may vary:** every model is built a little differently. Held items may sit slightly
 differently than on the N64, and the first-person slingshot can show a small stray sliver.
 
 ## How to use
 
-1. Open the site and drop in your `.pak` / `.zip` / `.zobj` files (adult, child and/or a voice pack).
+1. Open the site and drop in your `.pak` / `.zip` / `.zobj` files (adult, child, equipment packs and/or a voice pack).
 2. Pick the listed files from your own extracted OoT3D romfs (`actor/zelda_link_boy_new.zar`,
    `actor/zelda_link_child_new.zar`, `sound/QueenSound.bcsar`), or pick the whole romfs folder.
 3. Choose Citra or 3DS (Luma) and your game region, then **Convert** and download the zip.
@@ -44,9 +46,11 @@ The same converter runs with Python 3, numpy and Pillow (ffmpeg for voice packs)
 python tools/pack.py Adult_Model.pak Child_Model.pak Voice.pak --romfs path/to/ExtractedRomFS -o mod.zip
 python tools/pack.py --list-equipment Adult_Model.pak
 python tools/pack.py Adult_Model.pak --romfs path/to/ExtractedRomFS -o mod.zip --equipment none
+python tools/pack.py Child_Model.pak Equipment.pak --romfs path/to/ExtractedRomFS -o mod.zip --equipment "kokiri_sword=MM3D Razor Sword"
 ```
 
-Options: `--layout citra|luma|romfs`, `--region usa|eur|jpn`, `--equipment all|none|key,key...`.
+Options: `--layout citra|luma|romfs`, `--region usa|eur|jpn`,
+`--equipment all|none|key,key...|key=source,...` (source: `model`, `oot3d` or an equipment pack's name).
 
 ## Credits
 

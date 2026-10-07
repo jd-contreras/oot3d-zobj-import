@@ -199,6 +199,10 @@ def _relayout(blob, src, arrays, idx_buf, bpv=None):
     return bytes(b)
 
 
+class _PinOverflow(Exception):
+    pass
+
+
 def write(t, bone_trans, keep_meshes, materials, textures, new_meshes, name=None, combiners=None, pin_sepds=()):
     """t: template cmbr.CMB. keep_meshes: template mesh indices to keep (their sepds are reused).
     materials: full list of raw material blobs. textures: list of (cmbr.Texture, bytes) or NewTexture.
@@ -246,56 +250,115 @@ def write(t, bone_trans, keep_meshes, materials, textures, new_meshes, name=None
         return t.raw[so:so + struct.unpack_from('<I', t.raw, so + 4)[0]]
 
     link_src = ({a: t.vatr_chunk[off:off + size] for a, (size, off) in t.vatr.items()}, t.indices)
-    sepds = [(orig_sepd(i), link_src) for i in range(len(t.sepds))]
     kept_sepds = {t.meshes[mi][0] for mi in keep_meshes}
-    free = [i for i in range(len(t.sepds)) if i not in kept_sepds]
-    keep_set = set(keep_meshes)
-    opaque, trans = [], []
-    for mi, (s_, m, gid) in enumerate(t.meshes):
-        if mi in keep_set:
-            (trans if mi >= t.mshs_opaque else opaque).append((s_, m, gid))
-    new_opaque = []
-    for nm in new_meshes:
-        if not nm.tris:
-            continue
-        arrs = {a: bytearray() for a in cmbr.ATTRS}
-        idx = bytearray()
-        blob = _build_sepd(nm, {a: 0 for a in cmbr.ATTRS}, arrs, idx, bind_world)
-        entry = (blob, ({a: bytes(v) for a, v in arrs.items()}, bytes(idx)))
-        if free:
-            si = free.pop(0)
-            sepds[si] = entry
-        else:
-            si = len(sepds)
-            sepds.append(entry)
-        (trans if nm.translucent else new_opaque).append((si, nm.material, nm.group))
-    opaque += new_opaque
-    mesh_entries = [struct.pack('<HBB', si, m, gid) for si, m, gid in opaque + trans]
-    opaque_meshes = opaque
 
-    # Link's vertex data is contiguous in sepd order with no gaps (the game relies on it), and so
-    # is the index buffer: rebuild both in sepd order and patch every start / index offset.
-    arrays = {a: bytearray() for a in cmbr.ATTRS}
-    idx_buf = bytearray()
-    sepd_blobs, prev_bpv = [], {}
-    for si, (blob, src) in enumerate(sepds):
-        if si in pin_sepds:
-            # pad the previous sepd with unreferenced vertices up to Link's original starts
-            want = {a: t.sepds[si].attrs[a].start for a in cmbr.ATTRS
-                    if t.sepds[si].attrs[a].mode == 0 and (t.sepds[si].flags >> cmbr.ATTRS.index(a)) & 1}
-            gaps = {a: want[a] - len(arrays[a]) for a in want}
-            assert all(g >= 0 for g in gaps.values()), ('pinned sepd %d: data before it is larger than Link\'s' % si, gaps)
-            k = gaps['position'] // 12
-            for a in cmbr.ATTRS:
-                if a in want:
-                    arrays[a] += b'\0' * gaps[a]
-                elif a in prev_bpv:
-                    arrays[a] += b'\0' * (k * prev_bpv[a])
-        prev_bpv = {}
-        sepd_blobs.append(_relayout(blob, src, arrays, idx_buf, prev_bpv))
-        if si in pin_sepds:
-            got = struct.unpack_from('<I', sepd_blobs[-1], 0x24)[0]
-            assert got == t.sepds[si].attrs['position'].start, (si, got)
+    def layout(pins_first):
+        """Place new meshes in sepd slots and rebuild the vertex / index buffers."""
+        sepds = [(orig_sepd(i), link_src) for i in range(len(t.sepds))]
+        free = [i for i in range(len(t.sepds)) if i not in kept_sepds]
+        keep_set = set(keep_meshes)
+        opaque, trans = [], []
+        for mi, (s_, m, gid) in enumerate(t.meshes):
+            if mi in keep_set:
+                (trans if mi >= t.mshs_opaque else opaque).append((s_, m, gid))
+        new_entries = []
+        for nm in new_meshes:
+            if not nm.tris:
+                continue
+            arrs = {a: bytearray() for a in cmbr.ATTRS}
+            idx = bytearray()
+            blob = _build_sepd(nm, {a: 0 for a in cmbr.ATTRS}, arrs, idx, bind_world)
+            new_entries.append((nm, (blob, ({a: bytes(v) for a, v in arrs.items()}, bytes(idx)))))
+        def used(entry):
+            """{array: bytes} a sepd adds to the shared vertex arrays."""
+            arrays = {a: bytearray() for a in cmbr.ATTRS}
+            _relayout(entry[0], entry[1], arrays, bytearray())
+            return {a: len(v) for a, v in arrays.items()}
+
+        slot_of = {}
+        if pins_first:
+            # The free slots before the first pinned sepd take only as many new meshes as fit under
+            # its original array offsets; the others get a tiny unreferenced
+            # placeholder, and the remaining new meshes go after the pinned sepds.
+            first_pin = min(pin_sepds)
+            sp = t.sepds[first_pin]
+            budget = {a: sp.attrs[a].start for a in cmbr.ATTRS
+                      if sp.attrs[a].mode == 0 and (sp.flags >> cmbr.ATTRS.index(a)) & 1}
+            for i in kept_sepds:
+                if i < first_pin:
+                    for a, n in used(sepds[i]).items():
+                        if a in budget:
+                            budget[a] -= n
+            arrs = {a: bytearray() for a in cmbr.ATTRS}
+            idx = bytearray()
+            filler_mesh = NewMesh(0, 0, [[((0.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0), 0)] * 3])
+            filler_blob = _build_sepd(filler_mesh, {a: 0 for a in cmbr.ATTRS}, arrs, idx, bind_world)
+            filler = (filler_blob, ({a: bytes(v) for a, v in arrs.items()}, bytes(idx)))
+            filler_use = used(filler)
+            sizes = [used(e) for _, e in new_entries]
+            # smallest first: as many slots as possible hold a real mesh rather than a placeholder
+            order = sorted(range(len(new_entries)), key=lambda k: sizes[k]['position'])
+            slots = [i for i in free if i < first_pin]
+            for pos_in_list, i in enumerate(slots):
+                # keep room for a placeholder in every free slot still to come
+                reserve = {a: filler_use.get(a, 0) * (len(slots) - pos_in_list - 1) for a in budget}
+                pick = next((k for k in order
+                             if all(sizes[k].get(a, 0) <= budget[a] - reserve[a] for a in budget)), None)
+                use = sizes[pick] if pick is not None else filler_use
+                if pick is not None:
+                    order.remove(pick)
+                    slot_of[pick] = i
+                else:
+                    sepds[i] = filler
+                for a in budget:
+                    budget[a] -= use.get(a, 0)
+            free = [i for i in free if i > max(pin_sepds)]
+        new_opaque = []
+        for k, (nm, entry) in enumerate(new_entries):
+            if k in slot_of:
+                si = slot_of[k]
+            elif free:
+                si = free.pop(0)
+            else:
+                si = len(sepds)
+                sepds.append(None)
+            sepds[si] = entry
+            (trans if nm.translucent else new_opaque).append((si, nm.material, nm.group))
+        opaque += new_opaque
+        mesh_entries = [struct.pack('<HBB', si, m, gid) for si, m, gid in opaque + trans]
+        opaque_meshes = opaque
+
+        # Link's vertex data is contiguous in sepd order with no gaps (the game relies on it), and so
+        # is the index buffer: rebuild both in sepd order and patch every start / index offset.
+        arrays = {a: bytearray() for a in cmbr.ATTRS}
+        idx_buf = bytearray()
+        sepd_blobs, prev_bpv = [], {}
+        for si, (blob, src) in enumerate(sepds):
+            if si in pin_sepds:
+                # pad the previous sepd with unreferenced vertices up to Link's original starts
+                want = {a: t.sepds[si].attrs[a].start for a in cmbr.ATTRS
+                        if t.sepds[si].attrs[a].mode == 0 and (t.sepds[si].flags >> cmbr.ATTRS.index(a)) & 1}
+                gaps = {a: want[a] - len(arrays[a]) for a in want}
+                if any(g < 0 for g in gaps.values()):
+                    raise _PinOverflow(si)
+                k = gaps['position'] // 12
+                for a in cmbr.ATTRS:
+                    if a in want:
+                        arrays[a] += b'\0' * gaps[a]
+                    elif a in prev_bpv:
+                        arrays[a] += b'\0' * (k * prev_bpv[a])
+            prev_bpv = {}
+            sepd_blobs.append(_relayout(blob, src, arrays, idx_buf, prev_bpv))
+            if si in pin_sepds:
+                got = struct.unpack_from('<I', sepd_blobs[-1], 0x24)[0]
+                assert got == t.sepds[si].attrs['position'].start, (si, got)
+        return sepds, opaque, trans, sepd_blobs, arrays, idx_buf, mesh_entries
+
+    try:
+        sepds, opaque, trans, sepd_blobs, arrays, idx_buf, mesh_entries = layout(False)
+    except _PinOverflow:  # new meshes outgrew the space before a pinned sepd
+        sepds, opaque, trans, sepd_blobs, arrays, idx_buf, mesh_entries = layout(True)
+    opaque_meshes = opaque
 
     mshs = _chunk(b'mshs', struct.pack('<IHH', len(mesh_entries), len(opaque_meshes), t.mshs_ids) + b''.join(mesh_entries))
     shp_head = 0x10 + 2 * len(sepd_blobs)

@@ -5,7 +5,7 @@
 //               | {type: 'error', text}
 const PYODIDE = 'https://cdn.jsdelivr.net/pyodide/v0.29.3/full/';
 const TOOLS = ['build', 'voice', 'pack', 'ml64pak', 'zobj', 'cmb', 'cmbskel', 'pose', 'cmbwrite',
-  'cmabwrite', 'texenc', 'csab', 'zar', 'pica', 'fit', 'tunics', 'csar', 'voicemap', 'dspadpcm'];
+  'cmabwrite', 'texenc', 'csab', 'zar', 'pica', 'fit', 'tunics', 'csar', 'voicemap', 'dspadpcm', 'equippak'];
 
 importScripts(PYODIDE + 'pyodide.js', 'dspadpcm.js');
 self.dspEncode = dspEncode;  // tools/dspadpcm.py picks this up instead of its pure-Python loop
@@ -44,11 +44,13 @@ onmessage = async ev => {
 files = {}
 for item in js_inputs:
     files.update(pack.expand(item.name, item.data.to_bytes()))
-models, clips, notes = pack.plan(files)
+models, clips, notes, paks = pack.plan(files)
 clip_list = [(sid, i, name, data) for sid in sorted(clips) for i, (name, data) in enumerate(clips[sid])]
 need = [build.target_zar(age) for age in models] + (['QueenSound.bcsar'] if clips else [])
 {'models': {age: p for age, (p, _) in models.items()}, 'need': need, 'notes': notes,
- 'equipment': {age: [list(o) for o in opts] for age, opts in pack.equipment_options(models).items()},
+ 'equipment': {age: [[k, label, list(srcs), default] for k, label, srcs, default in opts]
+               for age, opts in pack.equipment_options(models, paks).items()},
+ 'paks': pack.pak_names(paks),
  'clips': [('%04X' % sid, name) for sid, i, name, _ in clip_list]}
 `);
       const summary = res.toJs({ dict_converter: Object.fromEntries });
@@ -72,7 +74,8 @@ decoded = {}
 for (sid, i, name, data), p in zip(clip_list, pcm):
     decoded[data] = p
 out, report = pack.make_mod(files, game, opts['rate'], opts['layout'], opts['region'],
-                            decode=lambda d: decoded[d], log=js_log, equipment=opts.get('equipment'))
+                            decode=lambda d: decoded[d], log=js_log,
+                            equipment={age: None if v == 'all' else v for age, v in (opts.get('equipment') or {}).items()})
 from pyodide.ffi import to_js
 to_js([memoryview(pack.zip_bytes(out)), '\\n'.join(report)])
 `);

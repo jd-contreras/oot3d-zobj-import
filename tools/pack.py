@@ -3,17 +3,18 @@
     python tools/pack.py <inputs...> --romfs <ExtractedRomFS> -o <out.zip | out_dir>
                          [--layout citra|luma|romfs] [--region usa|eur|jpn] [--equipment all|none|key,key...]
 
-Inputs: any mix of .pak, .zip, .zobj files and folders. The OoT adult / child zobjs and the voice
-clips (sounds/<hex id>/...) are found inside them; MM zobjs are skipped. --romfs is the user's own
-extracted OoT3D romfs (only the files the mod replaces are read from it).
---equipment picks which of the model's N64 items to use (default all it has); the rest stay
-OoT3D's. Keys: python tools/pack.py --list-equipment <inputs...>
+Inputs: any mix of .pak, .zip, .zobj files and folders. The OoT adult / child zobjs, equipment
+pack zobjs and the voice clips (sounds/<hex id>/...) are found inside them; MM zobjs are skipped.
+--romfs is the user's own extracted OoT3D romfs (only the files the mod replaces are read from it).
+--equipment picks the items to convert (default: from equipment packs first, else the model); the
+rest stay OoT3D's: all | none | key,key... | key=source,... (source: model, oot3d or a pack file
+name). Keys and sources: python tools/pack.py --list-equipment <inputs...>
 """
 import sys, os, io, zipfile, argparse
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(__file__))
-import build, voice, ml64pak
+import build, voice, ml64pak, equippak
 
 TITLE_IDS = {'usa': '0004000000033500', 'eur': '0004000000033600', 'jpn': '0004000000033400'}
 GAME_FILES = {  # file name -> path inside the romfs
@@ -39,10 +40,22 @@ def expand(name, data):
 
 
 def plan(files):
-    """What a file set contains: ({'adult'|'child': (path, zobj bytes)}, {sound id: clips}, notes)."""
-    models, notes = {}, []
+    """What a file set contains: ({'adult'|'child': (path, zobj bytes)}, {sound id: clips}, notes,
+    equipment packs [(path, parsed, zobj bytes)])."""
+    models, notes, paks = {}, [], []
     for path, data in sorted(files.items()):
         if not path.lower().endswith('.zobj'):
+            continue
+        if equippak.is_equipment(data):
+            info = equippak.parse(data)
+            if info['dls']:
+                paks.append((path, info, data))
+                ages = '/'.join(a for a in ('adult', 'child') if a in info['dls'])
+                notes.append(f'equipment: {info["name"] or path} ({info["category"]}, {ages})')
+            else:
+                notes.append(f'skipped {path} (equipment for another game)')
+            for u in info['unused']:
+                notes.append(f'{info["name"] or path}: slot {u} not supported yet')
             continue
         age = build.model_age(data)
         if age is None:
@@ -51,20 +64,27 @@ def plan(files):
             notes.append(f'skipped {path} (already using {models[age][0]} for {age})')
         else:
             models[age] = (path, data)
-    return models, voice.find_clips(files), notes
+    return models, voice.find_clips(files), notes, paks
 
 
-def equipment_options(models):
-    """{age: [(key, label, available in the model)]} for the planned models."""
-    return {age: build.equipment_options(data) for age, (_, data) in models.items()}
+def equipment_options(models, paks=()):
+    """{age: [(key, label, [source ids], default source)]} for the planned models; source ids are
+    'model' or an equipment pack path ('oot3d' is always possible)."""
+    return {age: build.equipment_options(data, paks) for age, (_, data) in models.items()}
+
+
+def pak_names(paks):
+    """{pack path: display name}."""
+    return {path: info['name'] or os.path.basename(path) for path, info, _ in paks}
 
 
 def make_mod(files, game, rate=22050, layout='citra', region='usa', decode=None, log=print, equipment=None):
     """files: {path: bytes} (inputs, already expanded). game: {GAME_FILES name: bytes} (only those
     needed). decode(bytes) -> mono int16 PCM at `rate` (default ffmpeg); audio files may also be
-    given already decoded as numpy arrays. equipment: {age: [keys] or None (all)} or None (all).
+    given already decoded as numpy arrays. equipment: {age: choice} with choice as in
+    build.convert (None, [keys] or {key: source}); missing ages use the defaults.
     Returns ({output path: bytes}, report lines)."""
-    models, clips, report = plan(files)
+    models, clips, report, paks = plan(files)
     if not models and not clips:
         raise ValueError('no OoT player zobj or voice clips found in the inputs')
     tid = TITLE_IDS[region]
@@ -79,7 +99,7 @@ def make_mod(files, game, rate=22050, layout='citra', region='usa', decode=None,
         if need not in game:
             raise ValueError(f'{need} from your OoT3D romfs (actor/{need}) is needed for the {age} model')
         log(f'converting {age} model {path}')
-        res = build.convert(data, game[need], (equipment or {}).get(age))
+        res = build.convert(data, game[need], (equipment or {}).get(age), paks)
         out[base + 'actor/' + res['name']] = res['zar']
         report.append(f'{age}: {path} -> romfs/actor/{res["name"]}')
     if clips:
@@ -122,14 +142,29 @@ def main():
                 files.update(expand(os.path.basename(inp.rstrip('/\\')) + '/' + k, v))
         else:
             files.update(expand(os.path.basename(inp), open(inp, 'rb').read()))
-    models, clips, _ = plan(files)
+    models, clips, _, paks = plan(files)
     if a.list_equipment:
-        for age, opts in equipment_options(models).items():
+        names = pak_names(paks)
+        for age, opts in equipment_options(models, paks).items():
             print(age + ':')
-            for key, label, have in opts:
-                print(f'  {key:16} {label}{"" if have else "  (not in this model)"}')
+            for key, label, srcs, default in opts:
+                alt = ', '.join(('*' if s == default else '') + names.get(s, s) for s in srcs) or 'OoT3D only'
+                print(f'  {key:16} {label:38} {alt}')
+        print('(* = default; every item can also be "oot3d")')
         return
-    eq = None if a.equipment == 'all' else [] if a.equipment == 'none' else a.equipment.split(',')
+    if a.equipment == 'all':
+        eq = None
+    elif a.equipment == 'none':
+        eq = []
+    elif '=' in a.equipment:  # key=source pairs; a source may be a pack's file or display name
+        byname = {n: p for p, n in pak_names(paks).items()}
+        byname.update({os.path.basename(p): p for p, _, _ in paks})
+        eq = {}
+        for item in a.equipment.split(','):
+            k, src = item.split('=', 1)
+            eq[k.strip()] = byname.get(src.strip(), src.strip())
+    else:
+        eq = a.equipment.split(',')
     equipment = {age: eq for age in models}
     if not a.romfs or not a.out:
         ap.error('--romfs and -o are required to convert')
