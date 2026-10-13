@@ -195,6 +195,31 @@ jd-contreras/Extra-Button-Functionality-for-OoT3D, the randomizer plus `item_but
 - Later idea: a self-contained add-on appended to any build's `code.ips`. Blocker: ZL / ZR are
   read through the randomizer's own ir:rst state, whose address changes per build.
 
+## OoT Model Manager, the 3DS app (2026-10-13)
+
+`app/` is a homebrew app (libctru + citro2d) that does on the console what needs no conversion:
+switching between already converted models and voice packs kept in `sdmc:/OoTModelManager`, and
+adding the Extra Buttons patch to a randomizer seed. It carries the site's own patches
+(`app/gen_builds.py` copies `web/extra-buttons-*` into its romfs and writes `source/builds.h`).
+
+- `source/merge.c` is `tools/seedmerge.py` in C, `source/voicelift.c` is the voice part of
+  `tools/csar.py`. Both are plain C and are checked on a PC against the Python tools, byte for
+  byte (`test_host.c`, `test_voice.c`); `test_manager.c` with `host/` runs the app's file logic
+  against a folder standing in for the SD card.
+- A voice pack changes one internal file of QueenSound.bcsar, WARC_SE, and in it only waves
+  250-329, 374 and 375 (Link's voice). Lifting those into another archive keeps that archive's
+  music, which is how a voice survives the randomizer's shuffled-music file.
+- The randomizer deletes `romfs/sound` and rewrites `code.ips` with every seed, so the app's
+  Apply patch redoes both. It marks the sound file it leaves (size + a checksum of the start of
+  Link's voice) to notice at start-up that it has been replaced.
+- Choosing only records a choice; nothing on the card changes until Apply patch.
+- Writing to the HID shared memory crashes on a console (read-only there); so does anything
+  else Citra tolerates but hardware doesn't. Test on a console before calling a build done.
+- There is no zlib among the 3DS libraries here, so `source/unzip.c` has its own small inflate;
+  every unpacked file is checked against the zip's CRC.
+- Releases: build, then attach `app/OoTModelManager.3dsx` to a GitHub release; the site and
+  README link to `releases/latest/download/OoTModelManager.3dsx`.
+
 ## Build
 
 ```

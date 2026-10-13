@@ -9,3 +9,10 @@ __pycache__/
 *.pak
 *.zobj
 *.zip
+
+# the 3DS app's build output (its romfs is filled from web/ by app/gen_builds.py)
+app/build/
+app/romfs/
+*.3dsx
+*.elf
+*.smdh

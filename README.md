@@ -57,6 +57,7 @@ differently than on the N64, and the first-person slingshot can show a small str
 3. Choose Citra or 3DS (Luma) and your game region, then **Convert** and download the zip.
    - **Citra:** extract into Citra's `load/mods` folder.
    - **3DS:** extract into your Luma `luma/titles` folder on the SD card, and enable game patching in the Luma3DS config.
+     Or keep the zip as it is and use the [OoT Model Manager](#oot-model-manager-3ds-app) app on the console.
 
 Tunic colours can be picked per model in step 1 (Kokiri / Goron / Zora for an adult model, one
 colour for a child model).
@@ -74,6 +75,63 @@ and turns the seed's Custom Tunic Colors off when a model is imported with it.
 
 The Extra Buttons code is open for anyone to use and modify, for example to add it to official
 randomizer builds or to other projects: [Extra Button Functionality for OoT3D](https://github.com/jd-contreras/Extra-Button-Functionality-for-OoT3D).
+
+## OoT Model Manager (3DS app)
+
+For console players: a homebrew app that switches between your converted characters and patches
+new randomizer seeds on the 3DS itself, so the SD card doesn't have to go back to a PC every time.
+
+**Download: [OoTModelManager.3dsx](https://github.com/jd-contreras/oot3d-zobj-import/releases/latest/download/OoTModelManager.3dsx)**
+
+It only loads models and voice packs that are **already converted** with the importer above: the
+conversion itself is not done on the console. What it does on its own is add Extra Buttons to a
+randomizer seed, on the fly, each time you make a new one.
+
+### Setting it up
+
+1. Copy `OoTModelManager.3dsx` into the `3ds` folder on your SD card.
+2. Run it once from the Homebrew Launcher. It makes an `OoTModelManager` folder at the top of the
+   SD card (next to the `3ds` folder, not inside it), with a `Voice` folder and a short how-to note.
+3. Put your converted characters in `OoTModelManager`, one per character:
+   - the **zip** the importer gives you, as it is, or
+   - a **folder** holding the converted files: an adult model, a child model and/or a voice pack.
+
+   File names don't matter. The folder or zip name is what the app shows, and the app works out
+   from each file whether it is an adult model, a child model or a voice pack.
+4. Voice packs that belong to no character go in `OoTModelManager/Voice`.
+
+### Using it
+
+Nothing on the card changes until you choose **Apply patch**. Everything else only records what
+you want, and the top screen shows what is selected and what is not applied yet.
+
+| Menu | What it does |
+| --- | --- |
+| Choose models and voice | Pick a whole character (Sets), or mix an adult model, a child model and a voice from the Adult, Child and Voice tabs |
+| Press A to randomize | Picks for you, as set under Randomize settings. You see the pick before applying it |
+| Randomize settings | What the randomize button picks: Set (one whole character), Adult, Child, Voice, or All; and Secret random, which hides the picks |
+| Apply extra buttons | On: Apply patch adds ZL / ZR and D-pad item buttons to your randomizer seed. Off: it removes them. Shows APPLIED once the seed has them |
+| Game region | Which game's folder the files go to. Auto uses the OoT3D folders found in `luma/titles` |
+| Apply patch | Writes your selection to the game. Use it after every new seed |
+
+Good to know:
+
+- **After every new seed, run the app and choose Apply patch.** The randomizer replaces
+  `code.ips` and clears the game's sound folder each time it makes a seed, so the buttons and
+  your voice pack have to be put back. Your models stay.
+- A voice pack is put *into* the sound file that is already there, so the randomizer's shuffled
+  music is kept.
+- Apply a voice to a character that has none and the app remembers it (a `uses.txt` file in that
+  character's folder), so the character keeps that voice from then on, also when picked at
+  random. Applying a different voice replaces it.
+- A seed made with the randomizer's Custom Tunic Colors on has that setting switched off while a
+  custom model is in use; with it on, every tunic would show the model's default colour.
+- Extra Buttons works with USA and Europe seeds made by randomizer `v4.0.2` or nightly `6bd4b80`.
+  A seed from another version is left alone and the app says so; models and voices still work.
+- The library is only read. Your zips and folders are never changed, apart from that `uses.txt`.
+
+The source is in [`app/`](app); `python gen_builds.py` then `make` builds it (devkitARM with
+libctru and citro2d).
 
 ## Command line
 
@@ -104,6 +162,7 @@ Buttons to a randomizer seed; `python tools/seedmerge.py code.ips out.ips` does 
 - Extra Buttons: [Extra Button Functionality for OoT3D](https://github.com/jd-contreras/Extra-Button-Functionality-for-OoT3D), built on the OoT3D Randomizer, with
   item-assignment hooks adapted from [Ocarina Reframed](https://github.com/OTPR26/OOT3DHud) by OTPR26
 - Python in the browser: [Pyodide](https://pyodide.org)
+- 3DS app: built with [devkitPro](https://devkitpro.org) (libctru, citro2d)
 
 Format notes and the history of how each piece was worked out are in [NOTES.md](NOTES.md).
 
