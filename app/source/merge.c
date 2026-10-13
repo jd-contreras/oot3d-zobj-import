@@ -179,6 +179,23 @@ static int Walk(Assign* a, int i, int cursor, int last, uint32_t lastOff, uint32
     return 0;
 }
 
+// A custom text entry (the randomizer's MessageEntry): id, three words, then for each of ten
+// languages the address of the text and its length.
+#define ENTRY_SIZE 0x60
+#define ENTRY_FIRST_TEXT 0x10
+#define ENTRY_TEXTS 10
+
+static uint32_t Le32(const uint8_t* p) {
+    return (uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
+}
+
+static void PutLe32(uint8_t* p, uint32_t v) {
+    p[0] = (uint8_t)v;
+    p[1] = (uint8_t)(v >> 8);
+    p[2] = (uint8_t)(v >> 16);
+    p[3] = (uint8_t)(v >> 24);
+}
+
 static void PutRecord(uint8_t** p, uint32_t off, const uint8_t* data, uint32_t len) {
     for (uint32_t i = 0; i < len; i += IPS_MAX_CHUNK) {
         const uint32_t n = len - i < IPS_MAX_CHUNK ? len - i : IPS_MAX_CHUNK;
@@ -214,6 +231,7 @@ MergeResult Merge_Apply(const uint8_t* seed, size_t seedLen, const uint8_t* base
     uint32_t* into = malloc((count ? count : 1) * sizeof(uint32_t));
     uint8_t* result = NULL;
     uint8_t* scratch = NULL;
+    uint8_t* text = NULL;
     res = MERGE_NO_MEMORY;
     if (!names || !into) goto done;
 
@@ -234,9 +252,50 @@ MergeResult Merge_Apply(const uint8_t* seed, size_t seedLen, const uint8_t* base
     scratch = malloc(largest);
     if (!result || !scratch) goto done;
 
+    // The seed's custom text: the messages, then a table of entries. Every entry holds the
+    // address of its text in each language. Those are addresses in the seed's own build, so
+    // they have to move with the text (a message read from the old address is garbage, and
+    // the game hangs on it). The whole block is gathered, its addresses moved, and each
+    // record is then written from the gathered copy.
+    uint32_t textLen = 0, textOld = 0, entriesOld = 0;
+    int haveText = 0, haveEntries = 0;
+    for (int i = 0; i < count; i++) {
+        const Record* r = &extras[i];
+        if (names[i] == SYM_CUSTOM_MESSAGES) {
+            if (into[i] + r->len > textLen) textLen = into[i] + r->len;
+            if (into[i] == 0) {
+                textOld = r->off + CODE_BASE;
+                haveText = 1;
+            }
+        } else if (names[i] == SYM_MESSAGE_ENTRIES_PTR && r->len == 4 && r->data) {
+            entriesOld = Le32(r->data);
+            haveEntries = 1;
+        }
+    }
+    const uint32_t moved = build->symbols[SYM_CUSTOM_MESSAGES].addr - textOld;
+    const uint32_t firstEntry = entriesOld - textOld;
+    if (!haveText || !haveEntries || firstEntry > textLen || (textLen - firstEntry) % ENTRY_SIZE) {
+        res = MERGE_NOT_A_SEED;
+        goto done;
+    }
+    text = calloc(textLen ? textLen : 1, 1);
+    if (!text) goto done;
+    for (int i = 0; i < count; i++) {
+        const Record* r = &extras[i];
+        if (names[i] != SYM_CUSTOM_MESSAGES) continue;
+        if (r->data) memcpy(text + into[i], r->data, r->len);
+        else memset(text + into[i], r->fill, r->len);
+    }
+    for (uint32_t entry = firstEntry; entry < textLen; entry += ENTRY_SIZE) {
+        for (uint32_t k = 0; k < ENTRY_TEXTS; k++) {
+            uint8_t* at = text + entry + ENTRY_FIRST_TEXT + 8 * k;
+            const uint32_t pointer = Le32(at);
+            if (pointer >= textOld && pointer < textOld + firstEntry) PutLe32(at, pointer + moved); // text only
+        }
+    }
+
     memcpy(result, base, baseLen - IPS_EOF);
     uint8_t* p = result + baseLen - IPS_EOF;
-    uint32_t msgOld = 0, msgNew = 0;
     for (int i = 0; i < count; i++) {
         const Record* r = &extras[i];
         const uint8_t* data = r->data;
@@ -247,13 +306,11 @@ MergeResult Merge_Apply(const uint8_t* seed, size_t seedLen, const uint8_t* base
         uint32_t newOff = r->off;
         if (names[i] >= 0) newOff = build->symbols[names[i]].addr - CODE_BASE + into[i];
 
-        if (names[i] == SYM_CUSTOM_MESSAGES && into[i] == 0) {
-            msgOld = r->off;
-            msgNew = newOff;
+        if (names[i] == SYM_CUSTOM_MESSAGES) {
+            data = text + into[i];
         } else if (names[i] == SYM_MESSAGE_ENTRIES_PTR) {
-            // A pointer into the custom text: move it by as much as the text moved.
-            uint32_t v = (uint32_t)data[0] | ((uint32_t)data[1] << 8) | ((uint32_t)data[2] << 16) | ((uint32_t)data[3] << 24);
-            v = v - msgOld + msgNew;
+            // The address of the entry table: it moved with the text.
+            const uint32_t v = Le32(data) + moved;
             scratch[0] = (uint8_t)v;
             scratch[1] = (uint8_t)(v >> 8);
             scratch[2] = (uint8_t)(v >> 16);
@@ -288,6 +345,7 @@ MergeResult Merge_Apply(const uint8_t* seed, size_t seedLen, const uint8_t* base
 done:
     free(result);
     free(scratch);
+    free(text);
     free(names);
     free(into);
     free(s.recs);

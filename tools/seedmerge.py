@@ -96,6 +96,36 @@ def load_base(build, region):
         return base, json.load(f)
 
 
+ENTRY_SIZE, ENTRY_FIRST_TEXT, ENTRY_TEXTS = 0x60, 0x10, 10  # MessageEntry: id, 3 words, 10 x (pointer, length)
+
+
+def move_messages(extras, names, new_addr):
+    """The seed's custom text as it must be written at `new_addr`: (bytes, how far it moved).
+
+    The text block is the messages followed by a table of entries, and every entry holds the
+    address of its text in each language. Those are addresses in the seed's own build, so
+    they have to move with the text (a message read from the old address is garbage, and the
+    game hangs on it)."""
+    parts = [(into, data) for (off, data), (name, into) in zip(extras, names) if name == 'rCustomMessages']
+    old_addr = next(off for (off, _), (name, into) in zip(extras, names) if name == 'rCustomMessages' and not into) + 0x100000
+    entries_addr = next(struct.unpack('<I', data)[0] for (_, data), (name, _) in zip(extras, names)
+                        if name == 'ptrCustomMessageEntries')
+    text = bytearray(max(into + len(data) for into, data in parts))
+    for into, data in parts:
+        text[into:into + len(data)] = data
+    moved = new_addr - old_addr
+    first = entries_addr - old_addr
+    if not 0 <= first <= len(text) or (len(text) - first) % ENTRY_SIZE:
+        raise ValueError('this seed\'s custom text is not laid out as expected')
+    for entry in range(first, len(text), ENTRY_SIZE):
+        for k in range(ENTRY_TEXTS):
+            at = entry + ENTRY_FIRST_TEXT + 8 * k
+            pointer = struct.unpack_from('<I', text, at)[0]
+            if old_addr <= pointer < old_addr + first:  # only addresses of the text itself
+                struct.pack_into('<I', text, at, pointer + moved)
+    return text, moved
+
+
 def merge(seed, drop_custom_tunics=False, bases=None):
     """seed: a randomizer seed's code.ips (bytes). Returns (merged code.ips, report lines, region).
     The seed's randomizer build and region are recognised from the game addresses its base
@@ -124,14 +154,15 @@ def merge(seed, drop_custom_tunics=False, bases=None):
     names = assign(extras, sym, start)
     if names is None:
         raise ValueError('this code.ips does not look like a seed made by ' + info['source'])
-    out, report, messages = bytearray(base[:-3]), [], None
+    text = move_messages(extras, names, sym['rCustomMessages'][0])
+    out, report = bytearray(base[:-3]), []
     for (off, data), (name, into) in zip(extras, names):
         old = off + 0x100000
         new = old if name is None else sym[name][0] + into
-        if name == 'rCustomMessages' and not into:
-            messages = (old, new)
+        if name == 'rCustomMessages':
+            data = bytes(text[0][into:into + len(data)])
         elif name == 'ptrCustomMessageEntries':
-            data = struct.pack('<I', struct.unpack('<I', data)[0] - messages[0] + messages[1])
+            data = struct.pack('<I', struct.unpack('<I', data)[0] + text[1])
         elif name == 'gSettingsContext':
             fields = info['settings']
             if data[fields['region']] != REGIONS.index(region):

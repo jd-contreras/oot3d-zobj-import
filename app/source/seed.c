@@ -138,7 +138,16 @@ void Seed_Update(Slot* slot, int dropTunics, char* msg) {
     if (seed && base && now &&
         Merge_Apply(seed, seedLen, base, baseLen, build, dropTunics, &tunicsWereOn, &out, &outLen) == MERGE_OK &&
         (outLen != nowLen || memcmp(out, now, outLen) != 0)) {
+        // Was it only the tunic setting that changed, or was the seed patched by an older
+        // version of the app (whose patch this one corrects)?
+        u8* other = NULL;
+        size_t otherLen = 0;
+        const int tunicsOnly = tunicsWereOn &&
+            Merge_Apply(seed, seedLen, base, baseLen, build, !dropTunics, NULL, &other, &otherLen) == MERGE_OK &&
+            otherLen == nowLen && memcmp(other, now, nowLen) == 0;
+        free(other);
         if (!File_Write(seedPath, out, outLen)) Message_Add(msg, "%s seed: could not update code.ips.", slot->name);
+        else if (!tunicsOnly) Message_Add(msg, "%s seed: Extra Buttons patch brought up to date.", slot->name);
         else if (dropTunics) Message_Add(msg, TUNICS_OFF_NOTE);
         else Message_Add(msg, "%s seed: the randomizer's Custom Tunic Colors are back on.", slot->name);
     }

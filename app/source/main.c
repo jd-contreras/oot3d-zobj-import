@@ -11,7 +11,7 @@
 #include "ui.h"
 
 #define APP_NAME "OoT Model Manager"
-#define APP_VERSION "2.5"
+#define APP_VERSION "2.6"
 
 typedef enum { SCREEN_HOME, SCREEN_LIST, SCREEN_RANDOM, SCREEN_DONE } Screen;
 
