@@ -104,13 +104,14 @@ def merge(seed, drop_custom_tunics=False, bases=None):
     bases: {(build, region): (base patch, address table)} (default: everything in web/)."""
     bases = bases or {(b, r): load_base(b, r) for b in BUILDS for r in REGIONS}
     seed_recs = records(seed)
-    # The base patch is written in ascending order; the seed's records start where that breaks.
+    # A file that starts with one of our whole base patches is one we already patched.
+    if any(seed.startswith(base[:-3]) for base, _ in bases.values()):
+        raise ValueError('this code.ips already has the Extra Buttons patch; add the code.ips the randomizer made')
+    # The randomizer's base patch is written in ascending order; the seed's records start where that breaks.
     split = next((i for i in range(1, len(seed_recs)) if seed_recs[i][0] < seed_recs[i - 1][0]), len(seed_recs))
     for (build, region), (base, info) in bases.items():
         start = info['randoStart'] - 0x100000  # file offset where the randomizer's own code begins
         theirs, ours = game_bytes(seed_recs[:split], start), game_bytes(records(base), start)
-        if theirs == ours:
-            raise ValueError('this code.ips already has the Extra Buttons patch; add the code.ips the randomizer made')
         if theirs <= ours and len(ours - theirs) == info['addedBytes']:
             break
     else:
