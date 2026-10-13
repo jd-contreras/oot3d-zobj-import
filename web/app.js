@@ -9,7 +9,7 @@ const LAYOUT_HELP = {
 };
 
 const $ = id => document.getElementById(id);
-const worker = new Worker('web/worker.js?v=20261013a');  // bump with index.html's version
+const worker = new Worker('web/worker.js?v=20261013b');  // bump with index.html's version
 const modFiles = new Map();   // name -> File
 const gameFiles = new Map();  // game file name -> File
 let seedFile = null;          // an OoT3D Randomizer seed's code.ips (gets the Extra Buttons patch)

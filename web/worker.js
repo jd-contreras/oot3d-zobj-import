@@ -12,7 +12,7 @@ const TOOLS = ['build', 'voice', 'pack', 'ml64pak', 'zobj', 'cmb', 'cmbskel', 'p
 const SEED_ASSETS = ['nightly-6bd4b80', 'v4.0.2'].flatMap(b => ['usa', 'eur'].flatMap(
   r => [`extra-buttons-${b}-${r}.ips`, `extra-buttons-${b}-${r}.json`]));  // seedmerge.BUILDS x REGIONS
 
-importScripts(PYODIDE + 'pyodide.js', 'dspadpcm.js?v=20261013a');
+importScripts(PYODIDE + 'pyodide.js', 'dspadpcm.js?v=20261013b');
 self.dspEncode = dspEncode;  // tools/dspadpcm.py picks this up instead of its pure-Python loop
 
 const log = text => postMessage({ type: 'log', text: String(text) });
@@ -89,7 +89,8 @@ for age, paths in cands.items():
     } else if (msg.type === 'convert') {
       if (!scanned) throw new Error('scan the mod files first');
       if (msg.seed) await loadSeedAssets();
-      py.globals.set('js_seed', msg.seed || null);
+      // No seed: an empty array, not null (a JavaScript null is not Python's None in Pyodide).
+      py.globals.set('js_seed', msg.seed || new Uint8Array(0));
       py.globals.set('js_game', msg.game);
       py.globals.set('js_clips', msg.clips);
       py.globals.set('js_opts', msg.options);
@@ -109,7 +110,7 @@ out, report = pack.make_mod(files, game, opts['rate'], opts['layout'], opts['reg
                             animations=bool(opts.get('animations', True)),
                             oot3d_scabbard={'adult'} if opts.get('oot3dScabbard') else (),
                             tunics=opts.get('tunics') or {},
-                            seed=js_seed.to_bytes() if js_seed is not None else None)
+                            seed=js_seed.to_bytes() or None)
 from pyodide.ffi import to_js
 to_js([memoryview(pack.zip_bytes(out)), '\\n'.join(report)])
 `);
