@@ -103,3 +103,13 @@ fieldset.equip .hide-back .muted { flex-basis: 100%; font-size: 0.9rem; }
 fieldset.equip .main-model { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; font-weight: 600; }
 fieldset.equip .child-bgs { display: block; margin-top: 12px; }
 fieldset.equip .child-bgs .muted { font-size: 0.9rem; }
+fieldset.equip .tunics { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin-top: 12px; }
+fieldset.equip .tunics .tunic-title { font-weight: 600; }
+fieldset.equip .tunics label { display: flex; align-items: center; gap: 6px; }
+fieldset.equip .tunics input[type=color] {
+  width: 40px; height: 28px; padding: 0; border: 1px solid var(--line); border-radius: 6px;
+  background: var(--bg); cursor: pointer;
+}
+fieldset.equip .tunics .muted { flex-basis: 100%; font-size: 0.9rem; }
+button.small { padding: 4px 12px; font-weight: 500; }
+button.secondary { background: transparent; color: var(--accent); }

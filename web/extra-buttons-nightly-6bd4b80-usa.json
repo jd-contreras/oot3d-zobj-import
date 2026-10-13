@@ -1,0 +1,75 @@
+{
+ "source": "OoT3D Randomizer nightly 6bd4b80",
+ "randoStart": 6057984,
+ "addedBytes": 80,
+ "symbols": {
+  "gSettingsContext": [
+   6729228,
+   384
+  ],
+  "gSpoilerData": [
+   6752968,
+   1228
+  ],
+  "gSpoilerDataLocs": [
+   6754196,
+   41768
+  ],
+  "numCustomMessageEntries": [
+   6409484,
+   4
+  ],
+  "ptrCustomMessageEntries": [
+   6691596,
+   4
+  ],
+  "rBGMOverrides": [
+   6423252,
+   512
+  ],
+  "rCustomMessages": [
+   6796368,
+   0
+  ],
+  "rDungeonImportance": [
+   6684020,
+   10
+  ],
+  "rDungeonRewardOverrides": [
+   6414256,
+   36
+  ],
+  "rEnemyOverrides": [
+   6654912,
+   6400
+  ],
+  "rEntranceOverrides": [
+   6661452,
+   2590
+  ],
+  "rGsLocOverrides": [
+   6410620,
+   2800
+  ],
+  "rItemOverrides": [
+   6684984,
+   6400
+  ],
+  "rScrubRandomItemPrices": [
+   6796016,
+   22
+  ],
+  "rSfxData": [
+   6729616,
+   23352
+  ],
+  "rShopsanityPrices": [
+   6796100,
+   128
+  ]
+ },
+ "settings": {
+  "region": 5,
+  "customTunicColors": 254
+ }
+}

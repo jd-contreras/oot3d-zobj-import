@@ -424,7 +424,7 @@ BIGGORON_PARTS = ('LONGSWORD_HILT', 'LONGSWORD_BLADE')
 
 
 def convert(zobj_src, zar_src, equipment=None, paks=(), hide_back=(), child_biggoron=None, anims=None,
-            oot3d_scabbard=False):
+            oot3d_scabbard=False, tunic_colors=None):
     """Convert one zobj. zobj_src / zar_src: paths or bytes (zar = Link's original archive of the same
     age). paks: equipment sources [(id, equippak.parse() result, zobj bytes)]: equipment packs, or
     other player models of the same age (category 'model'; pack.as_equipment).
@@ -437,7 +437,11 @@ def convert(zobj_src, zar_src, equipment=None, paks=(), hide_back=(), child_bigg
     from the model, with the Biggoron hilt in it when sheathed).
     child_biggoron: (adult zobj or pack bytes, {LONGSWORD_HILT / LONGSWORD_BLADE: address}, name) for a
     child model: the adult Biggoron Sword replaces the pedestal Master Sword (CHILD_BIGGORON_GROUP).
+    tunic_colors: {'kokiri' | 'goron' | 'zora': (r, g, b) 0-255} replacing the default tunic colours
+    (a child model only has the Kokiri one, baked in).
     Returns {'name': romfs/actor file name, 'zar': bytes, 'cmb': bytes}."""
+    tunics = dict(TUNICS)
+    tunics.update({k: tuple(v) for k, v in (tunic_colors or {}).items() if k in TUNICS})
     m = zobj.read(zobj_src)
     use_profile(CHILD if zobj.is_child(m) else ADULT)
     age = 'child' if zobj.is_child(m) else 'adult'
@@ -752,12 +756,12 @@ def convert(zobj_src, zar_src, equipment=None, paks=(), hide_back=(), child_bigg
         if key in mat_for:
             return mat_for[key]
         if tri.tex is None:
-            env = (WHITE if TUNIC_ANIM else TUNICS['kokiri']) if tri.tunic else None
-            col = np.broadcast_to(zobj.combine_rgb(tri, np.ones((1, 3)), env=env), (1, 3))[0]
+            env = (WHITE if TUNIC_ANIM else tunics['kokiri']) if tri.tunic else None
+            col =np.broadcast_to(zobj.combine_rgb(tri, np.ones((1, 3)), env=env), (1, 3))[0]
             px, w, h, cms, cmt = [tuple(int(round(c * 255)) for c in col) + (255,)] * 64, 8, 8, 0, 0
         else:
             # adult: tunic colour comes from the material's tint constant; child: always Kokiri
-            env = (WHITE if TUNIC_ANIM else TUNICS['kokiri']) if tri.tunic else None
+            env = (WHITE if TUNIC_ANIM else tunics['kokiri']) if tri.tunic else None
             px, w, h, cms, cmt = decode_tri(m, tri, env=env), tri.tex.w, tri.tex.h, tri.tex.cms, tri.tex.cmt
         px, w, h = texenc.pad_to_tiles(px, w, h)
         textures.append(cmbwrite.NewTexture('z%04x' % len(mat_for), w, h, texenc.RGBA8, texenc.encode_rgba8(px, w, h)))
@@ -766,7 +770,7 @@ def convert(zobj_src, zar_src, equipment=None, paks=(), hide_back=(), child_bigg
         if tri.texgen:
             materials[idx] = set_sphere_map(materials[idx])
         if tri.tunic and TUNIC_ANIM:
-            materials[idx] = add_tint_stage(materials[idx], tint_comb, TUNICS['kokiri'], combiners)
+            materials[idx] = add_tint_stage(materials[idx], tint_comb, tunics['kokiri'], combiners)
             tunic_mats.append(idx)
         mat_for[key] = idx
         return idx
@@ -862,7 +866,7 @@ def convert(zobj_src, zar_src, equipment=None, paks=(), hide_back=(), child_bigg
     if TUNIC_ANIM:
         # link_body.cmab: Link's own tunic texture swap is kept (material 1, now unused), plus one
         # ConstColor track per tunic material; the game plays frame 0/1/2 for Kokiri/Goron/Zora.
-        tint = [[c[k] / 255 for k in range(3)] for c in TUNICS.values()]
+        tint = [[c[k] / 255 for k in range(3)] for c in tunics.values()]
         cmabs[BODY_CMAB] = cmabwrite.write([(MAT_TUNIC, [0, 1, 2])], cmab_textures(files[BODY_CMAB]), 3,
                                            const_colors=[(i, TINT_CONST, tint) for i in tunic_mats])
     if anims is not None:

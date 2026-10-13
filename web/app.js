@@ -9,9 +9,14 @@ const LAYOUT_HELP = {
 };
 
 const $ = id => document.getElementById(id);
-const worker = new Worker('web/worker.js?v=20261007f');  // bump with index.html's version
+const worker = new Worker('web/worker.js?v=20261012e');  // bump with index.html's version
 const modFiles = new Map();   // name -> File
 const gameFiles = new Map();  // game file name -> File
+let seedFile = null;          // an OoT3D Randomizer seed's code.ips (gets the Extra Buttons patch)
+// Default tunic colours (tools/tunics.py), and the ones picked per age.
+const TUNIC_DEFAULTS = { kokiri: '#1ab31a', goron: '#c30819', zora: '#1144bb' };
+const TUNIC_LABELS = { kokiri: 'Kokiri', goron: 'Goron', zora: 'Zora' };
+const tunicChoice = { adult: { ...TUNIC_DEFAULTS }, child: { kokiri: TUNIC_DEFAULTS.kokiri } };
 let summary = null;           // from the worker's scan
 let clips = null;             // decoded voice clips (Int16Array), in scan order
 let workerReady = false, busy = false;
@@ -31,7 +36,7 @@ function li(cls, text) {
 worker.onmessage = async ev => {
   const m = ev.data;
   if (m.type === 'log') log(m.text);
-  else if (m.type === 'ready') { workerReady = true; log('Ready.'); if (modFiles.size) scan(); }
+  else if (m.type === 'ready') { workerReady = true; log('Ready.'); scan(); }
   else if (m.type === 'error') { log('Error: ' + m.text); busy = false; refresh(); }
   else if (m.type === 'scanned') {
     summary = m.summary;
@@ -76,12 +81,12 @@ async function decodeClip(bytes) {
 }
 
 function modName() {
-  const first = [...modFiles.keys()][0] || 'mod';
+  const first = [...modFiles.keys()][0] || (seedFile ? 'extra-buttons' : 'mod');
   return first.replace(/\.[^.]+$/, '').replace(/[^A-Za-z0-9_-]+/g, '_');
 }
 
 async function scan() {
-  if (!workerReady || !modFiles.size) return;
+  if (!workerReady || !(modFiles.size || seedFile)) return;
   busy = true;
   summary = null;
   $('download').hidden = true;
@@ -105,6 +110,9 @@ function renderMods() {
   const ul = $('mod-found');
   ul.replaceChildren();
   if (!summary) return;
+  if (seedFile) {
+    ul.append(li('ok', `Randomizer seed: ${seedFile.name} (Extra Buttons will be added: ZL / ZR = items I / II, D-pad = four more item slots)`));
+  }
   for (const age of ['adult', 'child']) {
     const paths = summary.models[age] || [];
     const cap = age[0].toUpperCase() + age.slice(1);
@@ -125,7 +133,7 @@ function renderMods() {
     ul.append(row);
   }
   for (const n of summary.notes) if (!/equipment source: .*\(model\)/.test(n)) ul.append(li('skip', n));
-  if (!Object.keys(summary.models).length && !summary.clips.length)
+  if (!Object.keys(summary.models).length && !summary.clips.length && !seedFile)
     ul.append(li('missing', 'No OoT player model or voice clips found in these files.'));
   renderEquipment();
 }
@@ -159,6 +167,14 @@ function renderEquipment() {
         <label><input type="checkbox" value="sword"> Hide sword on back</label>
         <span class="muted">Still shown when held. For long hair or a cape they would clip into.</span>
       </div>
+      <div class="tunics">
+        <span class="tunic-title">${age === 'adult' ? 'Tunic colours' : 'Tunic colour'}</span>
+        ${Object.keys(tunicChoice[age]).map(k => `<label>${age === 'adult' ? TUNIC_LABELS[k] : ''}
+          <input type="color" data-tunic="${k}" value="${tunicChoice[age][k]}"></label>`).join('')}
+        <button type="button" class="small random">Randomize</button>
+        <button type="button" class="small secondary reset">Reset</button>
+        <span class="muted">Recolours the parts of the model that change with the tunic.${age === 'child' ? ' The child has one tunic, as in the base game.' : ''}</span>
+      </div>
       ${age === 'adult' ? `<label class="child-bgs"><input type="checkbox" class="oot3d-scabbard"> Use OoT3D Biggoron scabbard
         <span class="muted">(the Biggoron hilt still comes from your choice; default: the model's Master Sword sheath)</span></label>` : ''}
       ${age === 'child' ? `<label class="child-bgs"><input type="checkbox" class="child-biggoron"> Import child Biggoron Sword
@@ -172,12 +188,28 @@ function renderEquipment() {
       sel.append(o);
     }
     sel.addEventListener('change', () => { mainChoice[age] = sel.value; fillItems(fs, age); });
+    const pickers = [...fs.querySelectorAll('.tunics input')];
+    const setTunics = fn => pickers.forEach(p => { p.value = tunicChoice[age][p.dataset.tunic] = fn(p.dataset.tunic); });
+    pickers.forEach(p => p.addEventListener('input', () => { tunicChoice[age][p.dataset.tunic] = p.value; }));
+    fs.querySelector('.tunics .random').addEventListener('click', () => setTunics(randomColor));
+    fs.querySelector('.tunics .reset').addEventListener('click', () => setTunics(k => TUNIC_DEFAULTS[k]));
     fs.addEventListener('change', () => {
       fs.querySelector('.items').hidden = fs.querySelector('input[type=radio]:checked').value !== 'pick';
     });
     fillItems(fs, age);
     box.append(fs);
   }
+}
+
+function randomColor() {
+  return '#' + [0, 0, 0].map(() => Math.floor(Math.random() * 256).toString(16).padStart(2, '0')).join('');
+}
+
+// {age: {tunic: [r, g, b]}} for the converter.
+function tunicColors() {
+  const rgb = hex => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16));
+  return Object.fromEntries(Object.entries(tunicChoice).map(
+    ([age, cols]) => [age, Object.fromEntries(Object.entries(cols).map(([k, hex]) => [k, rgb(hex)]))]));
 }
 
 function fillItems(fs, age) {
@@ -220,31 +252,40 @@ function renderGame() {
   const where = { 'QueenSound.bcsar': 'sound/' };
   for (const n of summary.need)
     ul.append(gameFiles.has(n) ? li('ok', n) : li('missing', `${n} (romfs/${where[n] || 'actor/'}${n})`));
+  if (seedFile) ul.append(li('ok', `${seedFile.name} (randomizer seed)`));
 }
 
 function refresh() {
   renderGame();
-  const ready = workerReady && summary && clips && summary.need.length &&
+  const ready = workerReady && summary && clips && (summary.need.length || seedFile) &&
     summary.need.every(n => gameFiles.has(n));
   $('convert').disabled = busy || !ready;
   $('layout-help').textContent = LAYOUT_HELP[$('layout').value];
 }
 
 function addModFiles(list) {
-  for (const f of list) modFiles.set(f.name, f);
+  for (const f of list) {
+    // a randomizer seed's files are kept apart from the mod files the converter scans
+    if (/\.ips$/i.test(f.name)) seedFile = f;
+    else modFiles.set(f.name, f);
+  }
   const ul = $('mod-found');
-  ul.replaceChildren(...[...modFiles.keys()].map(n => li('muted', n)));
+  const names = [...modFiles.keys(), ...(seedFile ? [seedFile.name] : [])];
+  ul.replaceChildren(...names.map(n => li('muted', n)));
   if (!workerReady) log('Waiting for Python to load...');
   scan();
 }
 
 function addGameFiles(list) {
+  let seedAdded = false;
   for (const f of list) {
+    if (/\.ips$/i.test(f.name)) { seedFile = f; seedAdded = true; continue; }  // a randomizer seed's code.ips
     if (!GAME_NAMES.includes(f.name)) continue;
     if (!f.size) { log(`Skipped ${f.name}: it is empty (0 bytes).`); continue; }
     gameFiles.set(f.name, f);
   }
-  refresh();
+  if (seedAdded) scan();  // the seed is listed with the mod files too
+  else refresh();
 }
 
 $('mod-input').addEventListener('change', e => addModFiles(e.target.files));
@@ -261,8 +302,9 @@ $('convert').addEventListener('click', async () => {
   $('download').hidden = true;
   refresh();
   log('Converting (this can take a few minutes)...');
-  let game;
+  let game, seed;
   try {
+    if (seedFile) seed = new Uint8Array(await seedFile.arrayBuffer());
     game = await Promise.all(summary.need.map(async n => {
       const f = gameFiles.get(n);
       if (!f.size) throw new Error(`${n} is empty (0 bytes). Pick the original from your extracted OoT3D romfs (actor/${n}).`);
@@ -271,14 +313,15 @@ $('convert').addEventListener('click', async () => {
   } catch (e) {
     // e.g. the file was moved, renamed or changed on disk after it was picked
     log('Error: ' + (e.name === 'NotFoundError' || e.name === 'NotReadableError'
-      ? 'a game file changed on disk after it was picked. Pick it again.' : e.message));
+      ? 'a file changed on disk after it was picked. Pick it again.' : e.message));
     busy = false;
     refresh();
     return;
   }
   worker.postMessage({
-    type: 'convert', game, clips,
+    type: 'convert', game, clips, seed,
     options: {
+      tunics: tunicColors(),
       rate: RATE, layout: $('layout').value, region: $('region').value, equipment: equipmentChoice(),
       main: { ...mainChoice },
       childBiggoron: !!document.querySelector('.child-biggoron:checked'),

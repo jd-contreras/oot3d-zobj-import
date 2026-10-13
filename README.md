@@ -58,8 +58,22 @@ differently than on the N64, and the first-person slingshot can show a small str
    - **Citra:** extract into Citra's `load/mods` folder.
    - **3DS:** extract to the root of the SD card and enable game patching in the Luma3DS config.
 
+Tunic colours can be picked per model in step 1 (Kokiri / Goron / Zora for an adult model, one
+colour for a child model).
+
 If you use the OoT3D Randomizer, turn off **Custom Tunic Colors**; it isn't compatible with
 imported models. Everything else in the randomizer works.
+
+### Extra Buttons for the randomizer
+
+Add your seed's `code.ips` in step 1 or 2, with or without a model, to add Extra Buttons to it:
+ZL and ZR use items I and II, and the D-pad holds four more items (hover an item on the Items
+page and press the button). The zip then contains the patched `code.ips`; the seed's
+`exheader.bin` does not change. It works with USA and Europe seeds (Citra or console) made by randomizer `v4.0.2` or nightly `6bd4b80`,
+and turns the seed's Custom Tunic Colors off when a model is imported with it.
+
+The Extra Buttons code is open for anyone to use and modify, for example to add it to official
+randomizer builds or to other projects: [Extra Button Functionality for OoT3D](https://github.com/jd-contreras/Extra-Button-Functionality-for-OoT3D).
 
 ## Command line
 
@@ -76,7 +90,9 @@ python tools/pack.py Model_A.pak Model_B.pak --main "Model A" --equipment "maste
 Options: `--layout citra|luma|romfs`, `--region usa|eur|jpn`,
 `--equipment all|none|key,key...|key=source,...` (source: `model`, `oot3d`, an equipment pack's name
 or another model's name), `--main NAME` (with several models of one age), `--child-biggoron`, `--oot3d-biggoron-scabbard`, `--no-animations`,
-`--hide-back shield`, `--hide-back sword` or `--hide-back shield,sword`.
+`--hide-back shield`, `--hide-back sword` or `--hide-back shield,sword`,
+`--tunics kokiri=RRGGBB,goron=RRGGBB,zora=RRGGBB,child=RRGGBB`, `--seed code.ips` (adds Extra
+Buttons to a randomizer seed; `python tools/seedmerge.py code.ips out.ips` does only that).
 
 ## Credits
 
@@ -85,6 +101,8 @@ or another model's name), `--main NAME` (with several models of one age), `--chi
 - OoT3D model, animation and archive format references: [noclip.website](https://github.com/magcius/noclip.website)
 - OoT3D behaviour and randomizer compatibility: [gamestabled/OoT3D_Randomizer](https://github.com/gamestabled/OoT3D_Randomizer)
 - N64 animation layout (link_animetion): [zeldaret/oot](https://github.com/zeldaret/oot)
+- Extra Buttons: [Extra Button Functionality for OoT3D](https://github.com/jd-contreras/Extra-Button-Functionality-for-OoT3D), built on the OoT3D Randomizer, with
+  item-assignment hooks adapted from [Ocarina Reframed](https://github.com/OTPR26/OOT3DHud) by OTPR26
 - Python in the browser: [Pyodide](https://pyodide.org)
 
 Format notes and the history of how each piece was worked out are in [NOTES.md](NOTES.md).

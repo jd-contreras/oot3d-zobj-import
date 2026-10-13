@@ -1,14 +1,18 @@
 // Runs the Python converter (tools/*.py) in Pyodide, off the page's main thread.
 // Messages in:  {type: 'scan', inputs: [{name, data}]}
-//               {type: 'convert', game: [[name, Uint8Array]], clips: [Int16Array], options}
+//               {type: 'convert', game: [[name, Uint8Array]], clips: [Int16Array], options,
+//                seed: Uint8Array | undefined (randomizer code.ips)}
 // Messages out: {type: 'log', text} | {type: 'ready'} | {type: 'scanned', ...} | {type: 'done', zip, report}
 //               | {type: 'error', text}
 const PYODIDE = 'https://cdn.jsdelivr.net/pyodide/v0.29.3/full/';
 const TOOLS = ['build', 'voice', 'pack', 'ml64pak', 'zobj', 'cmb', 'cmbskel', 'pose', 'cmbwrite',
   'cmabwrite', 'texenc', 'csab', 'zar', 'pica', 'fit', 'tunics', 'csar', 'voicemap', 'dspadpcm', 'equippak',
-  'animconv', 'n64anim', 'anim_tables', 'animview', 'cmbview', 'render'];
+  'animconv', 'n64anim', 'anim_tables', 'animview', 'cmbview', 'render', 'seedmerge'];
+// The Extra Buttons patch per game region, read by tools/seedmerge.py.
+const SEED_ASSETS = ['nightly-6bd4b80', 'v4.0.2'].flatMap(b => ['usa', 'eur'].flatMap(
+  r => [`extra-buttons-${b}-${r}.ips`, `extra-buttons-${b}-${r}.json`]));  // seedmerge.BUILDS x REGIONS
 
-importScripts(PYODIDE + 'pyodide.js', 'dspadpcm.js?v=20261007f');
+importScripts(PYODIDE + 'pyodide.js', 'dspadpcm.js?v=20261012e');
 self.dspEncode = dspEncode;  // tools/dspadpcm.py picks this up instead of its pure-Python loop
 
 const log = text => postMessage({ type: 'log', text: String(text) });
@@ -20,6 +24,7 @@ async function init() {
   py = await loadPyodide({ indexURL: PYODIDE });
   await py.loadPackage(['numpy', 'pillow']);
   py.FS.mkdir('/tools');
+  py.FS.mkdir('/web');
   await Promise.all(TOOLS.map(async name => {
     const r = await fetch(`../tools/${name}.py`, { cache: 'no-cache' });  // always the current converter
     if (!r.ok) throw new Error(`could not load tools/${name}.py`);
@@ -34,6 +39,17 @@ import pack, build, voice
   postMessage({ type: 'ready' });
 }
 const ready = init().catch(e => postMessage({ type: 'error', text: String(e) }));
+
+// The Extra Buttons patch is only downloaded when a randomizer seed is being patched.
+let seedAssets = null;
+function loadSeedAssets() {
+  seedAssets = seedAssets || Promise.all(SEED_ASSETS.map(async name => {
+    const r = await fetch(name, { cache: 'no-cache' });
+    if (!r.ok) throw new Error(`could not load web/${name}`);
+    py.FS.writeFile(`/web/${name}`, new Uint8Array(await r.arrayBuffer()));
+  }));
+  return seedAssets;
+}
 
 onmessage = async ev => {
   await ready;
@@ -72,6 +88,8 @@ for age, paths in cands.items():
       postMessage({ type: 'scanned', summary, clipData });
     } else if (msg.type === 'convert') {
       if (!scanned) throw new Error('scan the mod files first');
+      if (msg.seed) await loadSeedAssets();
+      py.globals.set('js_seed', msg.seed || null);
       py.globals.set('js_game', msg.game);
       py.globals.set('js_clips', msg.clips);
       py.globals.set('js_opts', msg.options);
@@ -89,7 +107,9 @@ out, report = pack.make_mod(files, game, opts['rate'], opts['layout'], opts['reg
                             hide_back={age: set(kinds) for age, kinds in (opts.get('hideBack') or {}).items()},
                             main=opts.get('main') or {}, child_biggoron=bool(opts.get('childBiggoron')),
                             animations=bool(opts.get('animations', True)),
-                            oot3d_scabbard={'adult'} if opts.get('oot3dScabbard') else ())
+                            oot3d_scabbard={'adult'} if opts.get('oot3dScabbard') else (),
+                            tunics=opts.get('tunics') or {},
+                            seed=js_seed.to_bytes() if js_seed is not None else None)
 from pyodide.ffi import to_js
 to_js([memoryview(pack.zip_bytes(out)), '\\n'.join(report)])
 `);

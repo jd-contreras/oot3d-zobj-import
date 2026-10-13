@@ -14,7 +14,7 @@ import sys, os, io, zipfile, argparse
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(__file__))
-import build, voice, ml64pak, equippak, zobj, animconv
+import build, voice, ml64pak, equippak, zobj, animconv, seedmerge
 
 TITLE_IDS = {'usa': '0004000000033500', 'eur': '0004000000033600', 'jpn': '0004000000033400'}
 GAME_FILES = {  # file name -> path inside the romfs
@@ -143,7 +143,8 @@ def biggoron_source(models, paks, choice=None):
 
 
 def make_mod(files, game, rate=22050, layout='citra', region='usa', decode=None, log=print, equipment=None,
-             hide_back=None, main=None, child_biggoron=False, animations=True, oot3d_scabbard=None):
+             hide_back=None, main=None, child_biggoron=False, animations=True, oot3d_scabbard=None,
+             tunics=None, seed=None):
     """files: {path: bytes} (inputs, already expanded). game: {GAME_FILES name: bytes} (only those
     needed). decode(bytes) -> mono int16 PCM at `rate` (default ffmpeg); audio files may also be
     given already decoded as numpy arrays. equipment: {age: choice} with choice as in
@@ -154,13 +155,27 @@ def make_mod(files, game, rate=22050, layout='citra', region='usa', decode=None,
     oot3d_scabbard: ages (adult) keeping OoT3D's Biggoron scabbard instead of the model's sheath.
     child_biggoron: the child model holds the adult Biggoron Sword (from the adult model or an
     adult equipment source) in place of the pedestal Master Sword, as ModLoader64's option does.
+    tunics: {age: {'kokiri' | 'goron' | 'zora': (r, g, b)}} tunic colours (child: Kokiri only).
+    seed: an OoT3D Randomizer seed's code.ips: the Extra Buttons patch is put under it
+    (tools/seedmerge.py) and the result written next to the romfs folder (the seed's exheader.bin
+    is not changed by it).
     Returns ({output path: bytes}, report lines)."""
     models, clips, report, paks, _ = plan(files, main)
-    if not models and not clips:
+    if not models and not clips and seed is None:
         raise ValueError('no OoT player zobj or voice clips found in the inputs')
     tid = TITLE_IDS[region]
     base = {'citra': f'{tid}/romfs/', 'luma': f'luma/titles/{tid}/romfs/', 'romfs': 'romfs/'}[layout]
     out = {}
+    if seed is not None:
+        log('adding Extra Buttons to the randomizer seed')
+        # the randomizer's own tunic option repaints Link's tunic texture, which imported models don't have
+        merged, lines, seed_region = seedmerge.merge(seed, drop_custom_tunics=bool(models))
+        if seed_region != region:
+            names = seedmerge.REGION_NAMES
+            raise ValueError(f'this randomizer seed is for the {names[seed_region]} game: set Game region to '
+                             f'{names[seed_region]} (it is set to {names[region]})')
+        out[base.split('romfs/')[0] + 'code.ips'] = merged
+        report += lines
     build.log = log
     bank = anim_bank(files) if animations else None
     if bank:
@@ -180,7 +195,8 @@ def make_mod(files, game, rate=22050, layout='citra', region='usa', decode=None,
                 log('child Biggoron Sword: no adult model or adult Biggoron Sword in the inputs, skipped')
                 report.append('child Biggoron Sword skipped (needs an adult model or adult Biggoron Sword)')
         res = build.convert(data, game[need], (equipment or {}).get(age), paks, (hide_back or {}).get(age, ()), bgs,
-                            bank[1] if bank and bank[2] else None, age in (oot3d_scabbard or ()))
+                            bank[1] if bank and bank[2] else None, age in (oot3d_scabbard or ()),
+                            (tunics or {}).get(age))
         out[base + 'actor/' + res['name']] = res['zar']
         report.append(f'{age}: {path} -> romfs/actor/{res["name"]}')
     if clips:
@@ -225,6 +241,9 @@ def main():
                     help="the child model holds the adult model's Biggoron Sword (replaces the pedestal Master Sword)")
     ap.add_argument('--hide-back', default='', metavar='shield,sword',
                     help='leave these off the back (still shown in hand), e.g. for long hair or a cape')
+    ap.add_argument('--tunics', default='', metavar='kokiri=RRGGBB,goron=...,zora=...,child=...',
+                    help='tunic colours (hex); child = the child model\'s tunic')
+    ap.add_argument('--seed', help="an OoT3D Randomizer seed's code.ips: adds the Extra Buttons patch to it (USA or Europe)")
     a = ap.parse_args()
 
     files = {}
@@ -268,15 +287,24 @@ def main():
     else:
         eq = a.equipment.split(',')
     equipment = {age: eq for age in models}
-    if not a.romfs or not a.out:
+    if not a.out or not a.romfs and (models or clips):
         ap.error('--romfs and -o are required to convert')
     need = [build.target_zar(age) for age in models] + (['QueenSound.bcsar'] if clips else [])
     game = {n: open(os.path.join(a.romfs, GAME_FILES[n]), 'rb').read() for n in need}
+    tunics = {'adult': {}, 'child': {}}
+    for item in filter(None, a.tunics.split(',')):
+        k, hexcol = item.split('=', 1)
+        rgb = tuple(bytes.fromhex(hexcol.strip().lstrip('#')))
+        if k.strip() == 'child':
+            tunics['child']['kokiri'] = rgb
+        else:
+            tunics['adult'][k.strip()] = rgb
 
     out, report = make_mod(files, game, a.rate, a.layout, a.region, equipment=equipment,
                            hide_back={age: {x for x in a.hide_back.split(',') if x} for age in models},
                            main=main, child_biggoron=a.child_biggoron, animations=not a.no_animations,
-                           oot3d_scabbard={'adult'} if a.oot3d_biggoron_scabbard else ())
+                           oot3d_scabbard={'adult'} if a.oot3d_biggoron_scabbard else (), tunics=tunics,
+                           seed=open(a.seed, 'rb').read() if a.seed else None)
     if a.out.lower().endswith('.zip'):
         open(a.out, 'wb').write(zip_bytes(out))
     else:

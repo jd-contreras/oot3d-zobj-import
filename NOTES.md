@@ -169,6 +169,32 @@ One command turns an ML64 / zzplayas player mod into a ready-to-copy OoT3D Layer
   (`_relayout`), and keeps Link's odd `mats` size field; a no-change rebuild is byte-identical.
   `tools/probe.py` re-encodes some of Link's own meshes as an in-game check.
 
+## Randomizer seeds: Extra Buttons (2026-10-12)
+
+A seed's `code.ips` added in step 1 or 2 gets the Extra Buttons patch (source:
+jd-contreras/Extra-Button-Functionality-for-OoT3D, the randomizer plus `item_buttons.c`).
+
+- A seed = the randomizer's base patch + that seed's records. `tools/seedmerge.py` swaps the base
+  patch for ours (`web/extra-buttons-<build>-<region>.ips`) and moves the seed's records to where
+  the same data sits in our build (`.json` next to it).
+- The official randomizer builds come from another compiler, so the seed's addresses say nothing
+  about ours: records are matched by the order `source/patch.cpp` writes them, their sizes, and
+  the ones every seed has. The seed's build and region are recognised from the game addresses its
+  base patch changes; anything else is refused. Limit: two builds that hook the same game
+  addresses can't be told apart (a `code.ips` carries no version).
+- Only `code.ips` changes. `exheader.bin` is the randomizer's (Citra and console differ there, not
+  in `code.ips`), so it is never read or written.
+- With a model, the seed's Custom Tunic Colors and rainbow tunic settings are zeroed (the model's
+  tunic colours come from the pickers; `tunic_colors` in build.convert).
+- Supporting another randomizer version: check it out, build it stock for USA and EUR, run the
+  Extra Buttons repo's `port_extra_buttons.py` on it, build again, then for each region
+  `python tools/gen_extra_buttons.py <build> usa|eur <our .ips> <our .elf> <stock .ips>`, and add
+  the build to `seedmerge.BUILDS`, `gen_extra_buttons.SOURCES` and `SEED_ASSETS` in web/worker.js.
+- Tested: USA and Europe nightly 6bd4b80 in Citra, USA v4.0.2 on a New 2DS XL. Europe v4.0.2 is
+  built, not tested.
+- Later idea: a self-contained add-on appended to any build's `code.ips`. Blocker: ZL / ZR are
+  read through the randomizer's own ir:rst state, whose address changes per build.
+
 ## Build
 
 ```

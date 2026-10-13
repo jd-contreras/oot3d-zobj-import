@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>OoT3D Model Importer</title>
 <meta name="description" content="Convert ModLoader64 (zzplayas) Ocarina of Time player models and voice packs into Ocarina of Time 3D mods, in your browser.">
-<link rel="stylesheet" href="web/style.css?v=20261007f">
+<link rel="stylesheet" href="web/style.css?v=20261012e">
 </head>
 <body>
 <main>
@@ -18,8 +18,9 @@
   <section class="step" id="step-mod">
     <h2><span class="num">1</span> Mod files</h2>
     <p>ML64 <code>.pak</code> files, <code>.zip</code> files or loose <code>.zobj</code> files. Add an adult model, a child model, equipment packs and/or a voice pack. MM models inside a pack are skipped.</p>
+    <p>Playing the <a href="https://github.com/gamestabled/OoT3D_Randomizer">OoT3D Randomizer</a>? Add your seed's <code>code.ips</code> too (with or without a model) to get Extra Buttons: ZL and ZR use items I and II, and the D-pad holds four more items.</p>
     <label class="drop" id="mod-drop">
-      <input type="file" id="mod-input" multiple accept=".pak,.zip,.zobj">
+      <input type="file" id="mod-input" multiple accept=".pak,.zip,.zobj,.ips">
       <span>Drop files here or <u>browse</u></span>
     </label>
     <ul class="found" id="mod-found"></ul>
@@ -28,9 +29,9 @@
 
   <section class="step" id="step-game">
     <h2><span class="num">2</span> Your OoT3D game files</h2>
-    <p>From your own extracted romfs (<code>ExtractedRomFS</code>). Pick the files listed below, or pick the whole romfs folder.</p>
+    <p>From your own extracted romfs (<code>ExtractedRomFS</code>). Pick the files listed below, or pick the whole romfs folder. A randomizer seed's <code>code.ips</code> can be picked here too.</p>
     <div class="row">
-      <label class="button secondary"><input type="file" id="game-files" multiple accept=".zar,.bcsar">Pick files</label>
+      <label class="button secondary"><input type="file" id="game-files" multiple accept=".zar,.bcsar,.ips">Pick files</label>
       <label class="button secondary"><input type="file" id="game-folder" webkitdirectory>Pick romfs folder</label>
     </div>
     <ul class="found" id="game-found"><li class="muted">Add mod files first to see which game files are needed.</li></ul>
@@ -64,7 +65,8 @@
     <h2>Good to know</h2>
     <ul>
       <li>Results vary from model to model: some held items may sit slightly differently than on the N64, and the first-person slingshot can show a small stray sliver.</li>
-      <li>Tunic colours (Kokiri / Goron / Zora) work for adult models. Turn off the OoT3D Randomizer's <em>Custom Tunic Colors</em> option, which is not compatible with imported models. Child models stay Kokiri green, as in the base game.</li>
+      <li>Tunic colours (Kokiri / Goron / Zora) work for adult models, and you can pick your own in step 1; a child model has one tunic colour, as in the base game. The OoT3D Randomizer's <em>Custom Tunic Colors</em> option is not compatible with imported models: leave it off, or add your seed's <code>code.ips</code> in step 1 and it is turned off for you.</li>
+      <li>Extra Buttons for the randomizer: on the Items page, hover an item and press ZL, ZR or a D-pad direction to put it there. ZL and ZR are the game's own I and II slots; the D-pad slots show at the top left of the top screen and reset when the game restarts. It works with USA and Europe seeds (Citra or console) made by randomizer v4.0.2 or nightly 6bd4b80, and ZL / ZR need a New 3DS / 2DS (or Citra). The Extra Buttons code is open: anyone may use and modify it, for example to add it to official randomizer builds or to other projects. <a href="https://github.com/jd-contreras/Extra-Button-Functionality-for-OoT3D">Extra Buttons source on GitHub</a>.</li>
       <li>A voice pack replaces Link's voice clips; any of Link's voice clips the pack doesn't cover are silenced.</li>
     </ul>
     <h2>Credits</h2>
@@ -72,11 +74,12 @@
       <li>ModLoader64 / Z64Online player model format and manifests: <a href="https://github.com/hylian-modding/Z64-CustomPlayerModels">hylian-modding/Z64-CustomPlayerModels</a></li>
       <li>OoT3D model and animation format references: <a href="https://github.com/magcius/noclip.website">noclip.website</a></li>
       <li>OoT3D game behaviour and randomizer compatibility: <a href="https://github.com/gamestabled/OoT3D_Randomizer">gamestabled/OoT3D_Randomizer</a></li>
+      <li>Extra Buttons: <a href="https://github.com/jd-contreras/Extra-Button-Functionality-for-OoT3D">Extra Button Functionality for OoT3D</a>, built on the OoT3D Randomizer, with item-assignment hooks adapted from <a href="https://github.com/OTPR26/OOT3DHud">Ocarina Reframed</a> by OTPR26</li>
       <li>Python in the browser: <a href="https://pyodide.org">Pyodide</a></li>
     </ul>
     <p class="muted"><a href="https://github.com/jd-contreras/oot3d-zobj-import">Source on GitHub</a>. Not affiliated with Nintendo. Ocarina of Time is a trademark of Nintendo.</p>
   </section>
 </main>
-<script src="web/app.js?v=20261007f"></script>
+<script src="web/app.js?v=20261012e"></script>
 </body>
 </html>
