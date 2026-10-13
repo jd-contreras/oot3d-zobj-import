@@ -187,7 +187,7 @@ jd-contreras/Extra-Button-Functionality-for-OoT3D, the randomizer plus `item_but
 - With a model, the seed's Custom Tunic Colors and rainbow tunic settings are zeroed (the model's
   tunic colours come from the pickers; `tunic_colors` in build.convert).
 - Supporting another randomizer version: check it out, build it stock for USA and EUR, run the
-  Extra Buttons repo's `port_extra_buttons.py` on it, build again, then for each region
+  Extra Buttons repo's `apply_extra_buttons.py` on it, build again, then for each region
   `python tools/gen_extra_buttons.py <build> usa|eur <our .ips> <our .elf> <stock .ips>`, and add
   the build to `seedmerge.BUILDS`, `gen_extra_buttons.SOURCES` and `SEED_ASSETS` in web/worker.js.
 - Tested: USA and Europe nightly 6bd4b80 in Citra, USA v4.0.2 on a New 2DS XL. Europe v4.0.2 is
