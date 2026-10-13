@@ -56,7 +56,7 @@ differently than on the N64, and the first-person slingshot can show a small str
    Use the original files, not ones from a mods folder (those are already converted).
 3. Choose Citra or 3DS (Luma) and your game region, then **Convert** and download the zip.
    - **Citra:** extract into Citra's `load/mods` folder.
-   - **3DS:** extract to the root of the SD card and enable game patching in the Luma3DS config.
+   - **3DS:** extract into your Luma `luma/titles` folder on the SD card, and enable game patching in the Luma3DS config.
 
 Tunic colours can be picked per model in step 1 (Kokiri / Goron / Zora for an adult model, one
 colour for a child model).

@@ -4,12 +4,12 @@ const RATE = 22050;  // voice sample rate (same default as tools/voice.py)
 const GAME_NAMES = ['zelda_link_boy_new.zar', 'zelda_link_child_new.zar', 'QueenSound.bcsar'];
 const LAYOUT_HELP = {
   citra: 'Extract the zip into Citra\'s mods folder (right-click the game in Citra > Open Mods Location, then go up one folder to load/mods).',
-  luma: 'Extract the zip to the root of your SD card and enable "game patching" in the Luma3DS config.',
+  luma: 'Extract the zip into your Luma luma/titles folder on the SD card, and enable "game patching" in the Luma3DS config.',
   romfs: 'A plain romfs folder, for other loaders or manual installs.',
 };
 
 const $ = id => document.getElementById(id);
-const worker = new Worker('web/worker.js?v=20261012e');  // bump with index.html's version
+const worker = new Worker('web/worker.js?v=20261013a');  // bump with index.html's version
 const modFiles = new Map();   // name -> File
 const gameFiles = new Map();  // game file name -> File
 let seedFile = null;          // an OoT3D Randomizer seed's code.ips (gets the Extra Buttons patch)

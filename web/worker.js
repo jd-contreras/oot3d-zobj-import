@@ -12,7 +12,7 @@ const TOOLS = ['build', 'voice', 'pack', 'ml64pak', 'zobj', 'cmb', 'cmbskel', 'p
 const SEED_ASSETS = ['nightly-6bd4b80', 'v4.0.2'].flatMap(b => ['usa', 'eur'].flatMap(
   r => [`extra-buttons-${b}-${r}.ips`, `extra-buttons-${b}-${r}.json`]));  // seedmerge.BUILDS x REGIONS
 
-importScripts(PYODIDE + 'pyodide.js', 'dspadpcm.js?v=20261012e');
+importScripts(PYODIDE + 'pyodide.js', 'dspadpcm.js?v=20261013a');
 self.dspEncode = dspEncode;  // tools/dspadpcm.py picks this up instead of its pure-Python loop
 
 const log = text => postMessage({ type: 'log', text: String(text) });

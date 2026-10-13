@@ -164,7 +164,8 @@ def make_mod(files, game, rate=22050, layout='citra', region='usa', decode=None,
     if not models and not clips and seed is None:
         raise ValueError('no OoT player zobj or voice clips found in the inputs')
     tid = TITLE_IDS[region]
-    base = {'citra': f'{tid}/romfs/', 'luma': f'luma/titles/{tid}/romfs/', 'romfs': 'romfs/'}[layout]
+    # citra: extracted into Citra's load/mods; luma: into the SD card's luma/titles (both hold title folders)
+    base = {'citra': f'{tid}/romfs/', 'luma': f'{tid}/romfs/', 'romfs': 'romfs/'}[layout]
     out = {}
     if seed is not None:
         log('adding Extra Buttons to the randomizer seed')
